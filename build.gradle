@@ -1,0 +1,96 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.107'
+}
+
+version = "${mod_version}+mc${minecraft_version}"
+group = "${mod_group_id}"
+
+base {
+    archivesName = mod_id
+}
+
+repositories {
+    // ForgeCDN 镜像；官方 maven.neoforged.net 在国内经常连不上
+    maven {
+        name = 'NeoForgedMirror'
+        url = 'https://neoforged.forgecdn.net/releases'
+    }
+    mavenCentral()
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+}
+
+configurations.all {
+    // 镜像里缺 net.neoforged:minecraft-dependencies（只有官方仓库有），
+    // 它只是 NeoForm 的元数据包，先排除掉试试能否继续构建。
+    exclude group: 'net.neoforged', module: 'minecraft-dependencies'
+}
+
+java {
+    toolchain {
+        // NeoForge 1.21.1 needs Java 21
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+    }
+
+    mods {
+        create("starforge") {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// Expand the mod metadata with the values from gradle.properties
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version: minecraft_version,
+            neo_version      : neo_version,
+            mod_id           : mod_id,
+            mod_name         : mod_name,
+            mod_version      : mod_version,
+            mod_authors      : mod_authors,
+            mod_license      : mod_license,
+            mod_description  : mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_name,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : mod_name,
+                'Implementation-Version'  : mod_version,
+                'Implementation-Vendor'   : mod_authors
+        ])
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "starforge:starforge_block"
+    }
+  ],
+  "result": {
+    "id": "starforge:starforge_ingot",
+    "count": 9
+  }
+}

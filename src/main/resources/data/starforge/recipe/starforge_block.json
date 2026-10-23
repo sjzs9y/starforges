@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": {
+      "starforge": "starforge:starforge_ingot"
+    }
+  },
+  "result": {
+    "id": "starforge:starforge_block",
+    "count": 1
+  }
+}

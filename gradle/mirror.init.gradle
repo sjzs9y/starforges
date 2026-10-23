@@ -1,0 +1,24 @@
+// 把 Gradle 里所有指向 maven.neoforged.net 的仓库改写到 ForgeCDN 镜像。
+//
+// 用法：gradlew build -I gradle/mirror.init.gradle
+// （ModDevGradle 内部会自己加一个官方仓库，只改 build.gradle 覆盖不到它，所以用 init script 统一重写）
+
+def rewrite = { repos ->
+    repos.all { repo ->
+        if (repo instanceof MavenArtifactRepository) {
+            def url = repo.url.toString()
+            if (url.contains('maven.neoforged.net')) {
+                repo.url = uri('https://neoforged.forgecdn.net/releases')
+            }
+        }
+    }
+}
+
+gradle.settingsEvaluated { settings ->
+    rewrite(settings.pluginManagement.repositories)
+}
+
+gradle.beforeProject { project ->
+    rewrite(project.repositories)
+    rewrite(project.buildscript.repositories)
+}
