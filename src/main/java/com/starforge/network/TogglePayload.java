@@ -1,7 +1,7 @@
 package com.starforge.network;
 
 import com.starforge.Starforge;
-import io.netty.buffer.ByteBuf;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -17,14 +17,14 @@ public record TogglePayload(int ability, boolean value) implements CustomPacketP
     public static final Type<TogglePayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(Starforge.MOD_ID, "toggle_ability"));
 
-    public static final StreamCodec<ByteBuf, TogglePayload> STREAM_CODEC = new StreamCodec<>() {
+    public static final StreamCodec<FriendlyByteBuf, TogglePayload> STREAM_CODEC = new StreamCodec<>() {
         @Override
-        public TogglePayload decode(ByteBuf buffer) {
+        public TogglePayload decode(FriendlyByteBuf buffer) {
             return new TogglePayload(buffer.readInt(), buffer.readBoolean());
         }
 
         @Override
-        public void encode(ByteBuf buffer, TogglePayload payload) {
+        public void encode(FriendlyByteBuf buffer, TogglePayload payload) {
             buffer.writeInt(payload.ability());
             buffer.writeBoolean(payload.value());
         }

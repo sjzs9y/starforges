@@ -23,12 +23,6 @@ repositories {
     }
 }
 
-configurations.all {
-    // 镜像里缺 net.neoforged:minecraft-dependencies（只有官方仓库有），
-    // 它只是 NeoForm 的元数据包，先排除掉试试能否继续构建。
-    exclude group: 'net.neoforged', module: 'minecraft-dependencies'
-}
-
 java {
     toolchain {
         // NeoForge 1.21.1 needs Java 21

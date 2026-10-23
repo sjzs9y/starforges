@@ -8,7 +8,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Client-only glue: the "G" key binding and the client tick hook that opens the menu.
@@ -18,11 +17,14 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class ClientSetup {
 
+    /** 71 is GLFW_KEY_G. The number is used directly to avoid depending on the LWJGL classes. */
+    private static final int KEY_G = 71;
+
     public static final KeyMapping OPEN_MENU = new KeyMapping(
             "key.starforge.open_whisper",
             KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_G,
+            KEY_G,
             "key.categories.starforge");
 
     /** Called once during mod construction, client side only. */
