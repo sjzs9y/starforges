@@ -39,8 +39,15 @@ public final class ClientSetup {
             "key.categories.starforge");
 
     /** Called once during mod construction, client side only. */
-    public static void init() {
+    public static void init(net.neoforged.bus.api.IEventBus modEventBus) {
         NeoForge.EVENT_BUS.addListener(ClientSetup::onClientTick);
+        modEventBus.addListener(ClientSetup::registerRenderers);
+    }
+
+    /** 注册「加速」悬浮文字的渲染器。 */
+    public static void registerRenderers(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(com.starforge.registry.ModEntities.ACCEL_DISPLAY.get(),
+                WhisperAccelDisplayRenderer::new);
     }
 
     /** Called through the mod event bus, client side only. */

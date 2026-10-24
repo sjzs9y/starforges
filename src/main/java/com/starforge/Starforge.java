@@ -6,6 +6,7 @@ import com.starforge.network.ModNetwork;
 import com.starforge.registry.ModArmorMaterials;
 import com.starforge.registry.ModBlocks;
 import com.starforge.registry.ModCreativeTabs;
+import com.starforge.registry.ModEntities;
 import com.starforge.registry.ModItems;
 import com.starforge.whisper.WhisperEvents;
 import net.neoforged.api.distmarker.Dist;
@@ -33,6 +34,7 @@ public final class Starforge {
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
+        ModEntities.ENTITY_TYPES.register(modEventBus);
 
         modEventBus.addListener(ModNetwork::register);
 
@@ -47,7 +49,7 @@ public final class Starforge {
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(ClientSetup::registerKeys);
-            ClientSetup.init();
+            ClientSetup.init(modEventBus);
         }
 
         LOGGER.info("Starforge is loading");

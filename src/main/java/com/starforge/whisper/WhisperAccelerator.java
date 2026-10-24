@@ -1,18 +1,16 @@
 package com.starforge.whisper;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.AgeableMob;
-import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.animal.Chicken;
@@ -26,14 +24,13 @@ import net.minecraft.world.phys.Vec3;
 /**
  * 右键「加速」的运行时状态。
  *
- * <p>先用右击给目标挂一层 1 倍加速，再右键会翻倍（上限 {@link #MAX_MULTIPLIER} 倍），
- * 每次右键把持续时间刷新回 {@link #DURATION_TICKS}（30 秒）。</p>
+ * <p>第一次右键挂 1 倍，之后每次翻倍（上限 {@link #MAX_MULTIPLIER}），每次刷新回 30 秒。
+ * 方块按倍率驱动方块实体 ticker / 随机刻；生物只推进计时器。</p>
  *
- * <p>方块：每 tick 按倍率驱动方块实体 ticker；没有方块实体但会随机刻的方块（作物、树苗）
- * 则按倍率执行随机刻。生物：只推进计时器（成长、繁殖冷却、下蛋、长毛、蜜蜂）。</p>
+ * <p>显示由 {@link WhisperAccelDisplay} 实体负责，渲染交给客户端，
+ * 加速逻辑本身与显示解耦，所以显示最多 32 个也不影响实际加速。</p>
  *
- * <p>每个被加速的目标头顶挂一个 {@code TextDisplay}，第一行显示倍率，第二行显示剩余秒数。
- * 状态只存在内存里，重进世界会清空。</p>
+ * <p>状态只存在内存里，重进世界会清空。</p>
  */
 public final class WhisperAccelerator {
 
@@ -43,31 +40,32 @@ public final class WhisperAccelerator {
     /** 倍率上限。 */
     public static final int MAX_MULTIPLIER = 64;
 
-    /** 每秒刷新一次头顶文字。 */
+    /** 同时最多显示多少个悬浮文字，防止极端情况实体爆炸。 */
+    public static final int MAX_DISPLAYS = 32;
+
+    /** 每秒刷新一次文字。 */
     private static final int DISPLAY_INTERVAL = 20;
 
-    /** 打在浮动文字实体上的标记，用于重启后清理残留。 */
-    private static final String ORPHAN_TAG = "starforge_accel_display";
+    /** 生物移动超过这个距离才更新显示坐标，避免每 tick 刷包。 */
+    private static final double MOVE_THRESHOLD_SQR = 0.05D * 0.05D;
 
     private static final Map<ResourceKey<Level>, Map<BlockPos, Target>> BLOCKS = new HashMap<>();
     private static final Map<ResourceKey<Level>, Map<UUID, Target>> ENTITIES = new HashMap<>();
 
-    /** 单个被加速目标的运行时状态。 */
     private static final class Target {
         int multiplier = 1;
         long expireTick;
-        Display.TextDisplay display;
+        WhisperAccelDisplay display;
     }
 
     public static void accelerateBlock(ServerLevel level, BlockPos pos) {
         BlockPos key = pos.immutable();
         Map<BlockPos, Target> map = BLOCKS.computeIfAbsent(level.dimension(), k -> new HashMap<>());
         Target target = map.get(key);
-        boolean fresh = target == null;
-        if (fresh) {
+        if (target == null) {
             target = new Target();
             map.put(key, target);
-            target.display = spawnDisplay(level, Vec3.atCenterOf(key).add(0.0D, 1.3D, 0.0D));
+            target.display = spawnDisplay(level, Vec3.atCenterOf(key).add(0.0D, 1.3D, 0.0D), displayCount(level));
         } else {
             target.multiplier = Math.min(MAX_MULTIPLIER, target.multiplier * 2);
         }
@@ -82,7 +80,7 @@ public final class WhisperAccelerator {
         if (target == null) {
             target = new Target();
             map.put(id, target);
-            target.display = spawnDisplay(level, displayPosFor(entity));
+            target.display = spawnDisplay(level, displayPosFor(entity), displayCount(level));
         } else {
             target.multiplier = Math.min(MAX_MULTIPLIER, target.multiplier * 2);
         }
@@ -141,9 +139,7 @@ public final class WhisperAccelerator {
                 for (int i = 0; i < target.multiplier; i++) {
                     tickEntityTimers(living);
                 }
-                if (target.display != null && !target.display.isRemoved()) {
-                    target.display.setPos(displayPosFor(living));
-                }
+                moveDisplay(living, target);
                 if (now % DISPLAY_INTERVAL == 0) {
                     updateDisplay(level, target);
                 }
@@ -151,34 +147,11 @@ public final class WhisperAccelerator {
         }
     }
 
-    // ------------------------------------------------------------------ 头顶文字
-
-    private static Vec3 displayPosFor(LivingEntity entity) {
-        return new Vec3(entity.getX(), entity.getY() + entity.getBbHeight() + 0.8D, entity.getZ());
-    }
-
-    private static Display.TextDisplay spawnDisplay(ServerLevel level, Vec3 pos) {
-        Display.TextDisplay display = EntityType.TEXT_DISPLAY.create(level);
-        if (display == null) {
-            return null;
-        }
-        display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
-        display.setNoGravity(true);
-        display.addTag(ORPHAN_TAG);
-        level.addFreshEntity(display);
-        return display;
-    }
-
-    /**
-     * 世界加载时清掉上一次残留的浮动文字。
-     *
-     * <p>加速状态只存在内存里，重启后目标列表是空的，但 {@code TextDisplay} 是真实实体、
-     * 会被存档保存下来，所以如果不清理，重进世界会看到一堆永远的「x64 30s」。</p>
-     */
+    /** 世界加载时清掉上一次残留的显示实体（加速状态不持久，留着只会变成幽灵文字）。 */
     public static void clearOrphanDisplays(ServerLevel level) {
-        java.util.List<Entity> orphans = new java.util.ArrayList<>();
+        List<Entity> orphans = new ArrayList<>();
         for (Entity entity : level.getAllEntities()) {
-            if (entity instanceof Display.TextDisplay && entity.getTags().contains(ORPHAN_TAG)) {
+            if (entity instanceof WhisperAccelDisplay) {
                 orphans.add(entity);
             }
         }
@@ -187,24 +160,52 @@ public final class WhisperAccelerator {
         }
     }
 
-    /**
-     * 更新头顶文字：第一行倍率，第二行剩余秒数。
-     *
-     * <p>1.21 里 {@code TextDisplay} 的 setter 全是 private，只能通过 NBT（{@code load}）写数据。</p>
-     */
+    // ------------------------------------------------------------------ 显示
+
+    private static int displayCount(ServerLevel level) {
+        int count = 0;
+        Map<BlockPos, Target> blocks = BLOCKS.get(level.dimension());
+        if (blocks != null) {
+            count += blocks.size();
+        }
+        Map<UUID, Target> entities = ENTITIES.get(level.dimension());
+        if (entities != null) {
+            count += entities.size();
+        }
+        return count;
+    }
+
+    private static Vec3 displayPosFor(LivingEntity entity) {
+        return new Vec3(entity.getX(), entity.getY() + entity.getBbHeight() + 0.8D, entity.getZ());
+    }
+
+    private static WhisperAccelDisplay spawnDisplay(ServerLevel level, Vec3 pos, int currentCount) {
+        if (currentCount >= MAX_DISPLAYS) {
+            return null;
+        }
+        WhisperAccelDisplay display = new WhisperAccelDisplay(level);
+        display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
+        display.setNoGravity(true);
+        level.addFreshEntity(display);
+        return display;
+    }
+
+    private static void moveDisplay(LivingEntity living, Target target) {
+        if (target.display == null || target.display.isRemoved()) {
+            return;
+        }
+        Vec3 wanted = displayPosFor(living);
+        if (target.display.position().distanceToSqr(wanted) > MOVE_THRESHOLD_SQR) {
+            target.display.moveTo(wanted.x, wanted.y, wanted.z, 0.0F, 0.0F);
+        }
+    }
+
     private static void updateDisplay(ServerLevel level, Target target) {
         if (target.display == null || target.display.isRemoved()) {
             return;
         }
         long remainTicks = Math.max(0L, target.expireTick - level.getGameTime());
-        String text = "x" + target.multiplier + "\n" + (remainTicks / 20L) + "s";
-
-        CompoundTag tag = new CompoundTag();
-        tag.putString("text", Component.Serializer.toJson(Component.literal(text), level.registryAccess()));
-        tag.putString("billboard", "center");
-        tag.putInt("background", 0x40000000);
-        tag.putBoolean("see_through", true);
-        target.display.load(tag);
+        target.display.setDisplay(target.multiplier, (int) remainTicks);
     }
 
     private static void discardDisplay(Target target) {
@@ -216,9 +217,6 @@ public final class WhisperAccelerator {
 
     // ------------------------------------------------------------------ 推进方块 / 生物
 
-    /**
-     * 推进一个方块 {@code multiplier} 次。返回 {@code false} 表示这个位置已经不值得继续加速。
-     */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static boolean tickBlock(ServerLevel level, BlockPos pos, int multiplier) {
         if (!level.isLoaded(pos)) {
@@ -251,7 +249,6 @@ public final class WhisperAccelerator {
         return true;
     }
 
-    /** 只推进生物身上的计时器，不跑 AI。 */
     private static void tickEntityTimers(LivingEntity entity) {
         if (entity instanceof AgeableMob ageable) {
             int age = ageable.getAge();
