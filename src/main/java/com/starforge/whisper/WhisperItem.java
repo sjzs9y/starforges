@@ -9,7 +9,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -62,16 +62,15 @@ public class WhisperItem extends Item {
      * <p>需要「一击必杀」开关打开；开着「无敌」的目标不会因此死亡。</p>
      */
     @Override
-    public InteractionResult use(Level level, Player player, InteractionHand hand) {
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
-            return InteractionResult.PASS;
+            return InteractionResultHolder.pass(stack);
         }
-        if (level.isClientSide()) {
-            return InteractionResult.SUCCESS;
+        if (!level.isClientSide()) {
+            attackArea(level, player);
         }
-        attackArea(level, player);
-        return InteractionResult.SUCCESS;
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
     }
 
     /**
