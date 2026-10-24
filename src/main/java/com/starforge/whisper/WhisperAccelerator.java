@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Bee;
@@ -44,6 +45,9 @@ public final class WhisperAccelerator {
 
     /** 每秒刷新一次头顶文字。 */
     private static final int DISPLAY_INTERVAL = 20;
+
+    /** 打在浮动文字实体上的标记，用于重启后清理残留。 */
+    private static final String ORPHAN_TAG = "starforge_accel_display";
 
     private static final Map<ResourceKey<Level>, Map<BlockPos, Target>> BLOCKS = new HashMap<>();
     private static final Map<ResourceKey<Level>, Map<UUID, Target>> ENTITIES = new HashMap<>();
@@ -160,8 +164,27 @@ public final class WhisperAccelerator {
         }
         display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
         display.setNoGravity(true);
+        display.addTag(ORPHAN_TAG);
         level.addFreshEntity(display);
         return display;
+    }
+
+    /**
+     * 世界加载时清掉上一次残留的浮动文字。
+     *
+     * <p>加速状态只存在内存里，重启后目标列表是空的，但 {@code TextDisplay} 是真实实体、
+     * 会被存档保存下来，所以如果不清理，重进世界会看到一堆永远的「x64 30s」。</p>
+     */
+    public static void clearOrphanDisplays(ServerLevel level) {
+        java.util.List<Entity> orphans = new java.util.ArrayList<>();
+        for (Entity entity : level.getAllEntities()) {
+            if (entity instanceof Display.TextDisplay && entity.getTags().contains(ORPHAN_TAG)) {
+                orphans.add(entity);
+            }
+        }
+        for (Entity orphan : orphans) {
+            orphan.discard();
+        }
     }
 
     /**
