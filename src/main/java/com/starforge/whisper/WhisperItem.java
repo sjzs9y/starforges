@@ -12,7 +12,9 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -56,10 +58,14 @@ public class WhisperItem extends Item {
     /** 右键范围攻击的半径：7 格，即 15×15×15 的范围。 */
     public static final double ATTACK_RADIUS = 7.0D;
 
+    /** 按住右键时，每隔多少 tick 清一次场（10 tick = 0.5 秒）。 */
+    public static final int ATTACK_INTERVAL = 10;
+
     /**
-     * 右键（对着空气）触发范围攻击：一键必杀周围所有生物。
+     * 右键触发范围攻击。
      *
-     * <p>需要「一击必杀」开关打开；开着「无敌」的目标不会因此死亡。</p>
+     * <p>返回 {@code consume} 并进入「使用中」状态，这样按住右键时 {@link #onUseTick} 会每 tick 回调；
+     * 配合 {@link #getUseDuration} 就能实现「按住持续清场」。</p>
      */
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
@@ -70,17 +76,39 @@ public class WhisperItem extends Item {
         if (!level.isClientSide()) {
             attackArea(level, player);
         }
-        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+        player.startUsingItem(hand);
+        return InteractionResultHolder.consume(stack);
+    }
+
+    /** 按住右键时每 tick 回调一次；这里每 {@link #ATTACK_INTERVAL} tick 清一次场。 */
+    @Override
+    public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remainingUseDuration) {
+        if (level.isClientSide() || !(living instanceof Player player)) {
+            return;
+        }
+        if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+            return;
+        }
+        if (remainingUseDuration % ATTACK_INTERVAL == 0) {
+            attackArea(level, player);
+        }
+    }
+
+    /** 「使用中」的持续时间；给一个很大的值，松手才结束。 */
+    @Override
+    public int getUseDuration(ItemStack stack, LivingEntity entity) {
+        return 72000;
     }
 
     /**
-     * 对周围 15×15 范围内的生物造成必死伤害。
+     * 对周围 15×15×15 范围内的生物造成必死伤害，并把范围内的掉落物和经验球一起清掉。
      *
      * <p>用伤害而不是直接 setHealth(0)，这样「无敌」才能生效，也能正常吃到抢夺加成。</p>
      */
     private static void attackArea(Level level, Player player) {
         DamageSource source = player.damageSources().playerAttack(player);
         AABB area = player.getBoundingBox().inflate(ATTACK_RADIUS);
+
         for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area)) {
             if (target == player || !target.isAlive()) {
                 continue;
@@ -89,6 +117,14 @@ public class WhisperItem extends Item {
                 continue;
             }
             target.hurt(source, Float.MAX_VALUE);
+        }
+
+        // 清场：范围内的掉落物 + 经验球（死亡掉落是在 hurt 里同步生成的，所以放在后面）
+        for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, area)) {
+            item.discard();
+        }
+        for (ExperienceOrb orb : level.getEntitiesOfClass(ExperienceOrb.class, area)) {
+            orb.discard();
         }
     }
 
