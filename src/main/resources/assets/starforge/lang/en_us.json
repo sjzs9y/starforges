@@ -17,6 +17,7 @@
   "key.categories.starforge": "Starforge",
   "key.starforge.open_whisper": "Open Whisper Menu",
   "screen.starforge.whisper": "Whisper",
+  "tooltip.starforge.whisper.attack": "Right-click: kill everything within 15x15",
   "tooltip.starforge.whisper.hint": "Press G to open the ability menu",
   "whisper.starforge.flight": "Flight",
   "whisper.starforge.invincible": "Invincible",

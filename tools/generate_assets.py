@@ -388,6 +388,7 @@ EXTRA_LANG = {
         "gui.starforge.on": "ON",
         "gui.starforge.off": "OFF",
         "tooltip.starforge.whisper.hint": "Press G to open the ability menu",
+        "tooltip.starforge.whisper.attack": "Right-click: kill everything within 15x15",
     },
     "zh_cn.json": {
         "itemGroup.starforge": "星辉工坊",
@@ -406,6 +407,7 @@ EXTRA_LANG = {
         "gui.starforge.on": "开",
         "gui.starforge.off": "关",
         "tooltip.starforge.whisper.hint": "按 G 打开功能开关",
+        "tooltip.starforge.whisper.attack": "右键：击杀 15×15 范围内的生物（需开启一击必杀）",
     },
 }
 

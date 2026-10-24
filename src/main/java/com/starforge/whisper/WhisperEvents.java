@@ -1,19 +1,23 @@
 package com.starforge.whisper;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 /**
  * Server side behaviour of the Whisper item.
  *
  * <p>被动能力（无敌 / 飞行 / 夜视 / 饱和 / 水下呼吸 / 真隐身）只要物品在背包、副手或主手任意位置
- * 就会生效；主动能力（一击必杀）仍然要求拿在主手。</p>
+ * 就会生效；主动能力（一击必杀 / 范围攻击 / 精准 / 幸运）仍然要求拿在主手。</p>
  *
  * <p>所有效果都每 tick 从物品重新判定，没有隐藏状态：把物品丢出去或者关掉开关，效果立刻停止。</p>
  */
@@ -55,6 +59,9 @@ public final class WhisperEvents {
         if (event.getEntity() instanceof ServerPlayer player
                 && WhisperData.isPassiveEnabled(player, WhisperAbility.INVINCIBLE)) {
             event.setCanceled(true);
+            // 氪金萝莉的写法：顺手灭火、清掉摔落距离
+            player.clearFire();
+            player.fallDistance = 0.0F;
             return;
         }
 
@@ -63,9 +70,46 @@ public final class WhisperEvents {
         if (attacker instanceof ServerPlayer player) {
             ItemStack stack = player.getMainHandItem();
             if (stack.getItem() instanceof WhisperItem && WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
-                event.setAmount(1000.0F);
+                event.setAmount(Float.MAX_VALUE);
             }
         }
+    }
+
+    /**
+     * 无敌：连死亡事件一起挡掉。
+     *
+     * <p>伤害已经被取消，正常情况下走不到这里；这一步是兜底（例如别的模组直接 setHealth(0)）。</p>
+     */
+    public static void onLivingDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player
+                && WhisperData.isPassiveEnabled(player, WhisperAbility.INVINCIBLE)) {
+            event.setCanceled(true);
+            player.setHealth(player.getMaxHealth());
+        }
+    }
+
+    /**
+     * 精准模式的「强制掉落」：精准采集已经保证绝大多数方块掉本体，
+     * 这里补上「正常掉落为空」的情况——直接掉方块本身（氪金萝莉的 mandatoryDrop 逻辑）。
+     */
+    public static void onBlockDrops(BlockDropsEvent event) {
+        if (!(event.getBreaker() instanceof ServerPlayer player)) {
+            return;
+        }
+        ItemStack tool = player.getMainHandItem();
+        if (!(tool.getItem() instanceof WhisperItem) || !WhisperData.isEnabled(tool, WhisperAbility.PRECISE)) {
+            return;
+        }
+        if (!event.getDrops().isEmpty()) {
+            return;
+        }
+        ItemStack self = new ItemStack(event.getState().getBlock());
+        if (self.isEmpty()) {
+            return;
+        }
+        BlockPos pos = event.getPos();
+        event.getDrops().add(new ItemEntity(event.getLevel(),
+                pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, self));
     }
 
     /**

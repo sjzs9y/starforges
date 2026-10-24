@@ -39,6 +39,8 @@ public final class Starforge {
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onLivingIncomingDamage);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onLivingChangeTarget);
+        NeoForge.EVENT_BUS.addListener(WhisperEvents::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(WhisperEvents::onBlockDrops);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(ClientSetup::registerKeys);

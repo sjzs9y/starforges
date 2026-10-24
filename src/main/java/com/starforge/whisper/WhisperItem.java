@@ -8,7 +8,12 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -17,6 +22,7 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 
 /**
  * 轻语轻扬。
@@ -44,6 +50,47 @@ public class WhisperItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("tooltip.starforge.whisper.hint").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.starforge.whisper.attack").withStyle(ChatFormatting.GRAY));
+    }
+
+    /** 右键范围攻击的半径：7 格，即 15×15×15 的范围。 */
+    public static final double ATTACK_RADIUS = 7.0D;
+
+    /**
+     * 右键（对着空气）触发范围攻击：一键必杀周围所有生物。
+     *
+     * <p>需要「一击必杀」开关打开；开着「无敌」的目标不会因此死亡。</p>
+     */
+    @Override
+    public InteractionResult use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+            return InteractionResult.PASS;
+        }
+        if (level.isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+        attackArea(level, player);
+        return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * 对周围 15×15 范围内的生物造成必死伤害。
+     *
+     * <p>用伤害而不是直接 setHealth(0)，这样「无敌」才能生效，也能正常吃到抢夺加成。</p>
+     */
+    private static void attackArea(Level level, Player player) {
+        DamageSource source = player.damageSources().playerAttack(player);
+        AABB area = player.getBoundingBox().inflate(ATTACK_RADIUS);
+        for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area)) {
+            if (target == player || !target.isAlive()) {
+                continue;
+            }
+            if (target instanceof Player other && WhisperData.isPassiveEnabled(other, WhisperAbility.INVINCIBLE)) {
+                continue;
+            }
+            target.hurt(source, Float.MAX_VALUE);
+        }
     }
 
     /**
