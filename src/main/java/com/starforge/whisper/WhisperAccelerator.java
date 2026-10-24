@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -158,19 +159,29 @@ public final class WhisperAccelerator {
             return null;
         }
         display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
-        display.setBillboardConstraints(Display.BillboardConstraints.CENTER);
-        display.setBackgroundColor(0x40000000);
+        display.setNoGravity(true);
         level.addFreshEntity(display);
         return display;
     }
 
+    /**
+     * 更新头顶文字：第一行倍率，第二行剩余秒数。
+     *
+     * <p>1.21 里 {@code TextDisplay} 的 setter 全是 private，只能通过 NBT（{@code load}）写数据。</p>
+     */
     private static void updateDisplay(ServerLevel level, Target target) {
         if (target.display == null || target.display.isRemoved()) {
             return;
         }
         long remainTicks = Math.max(0L, target.expireTick - level.getGameTime());
         String text = "x" + target.multiplier + "\n" + (remainTicks / 20L) + "s";
-        target.display.setText(Component.literal(text));
+
+        CompoundTag tag = new CompoundTag();
+        tag.putString("text", Component.Serializer.toJson(Component.literal(text), level.registryAccess()));
+        tag.putString("billboard", "center");
+        tag.putInt("background", 0x40000000);
+        tag.putBoolean("see_through", true);
+        target.display.load(tag);
     }
 
     private static void discardDisplay(Target target) {
