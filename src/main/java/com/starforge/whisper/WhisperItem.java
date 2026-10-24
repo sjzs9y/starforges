@@ -63,7 +63,7 @@ public class WhisperItem extends Item {
     public static final float FALLBACK_DAMAGE = 10.0F;
 
     /** 复制模式一次复制多少个。 */
-    public static final int DUPLICATE_COUNT = 64;
+    public static final int DUPLICATE_COUNT = 1;
 
     public WhisperItem(Properties properties) {
         super(properties);
@@ -241,7 +241,7 @@ public class WhisperItem extends Item {
         }
     }
 
-    /** 复制被右键的方块本身：一次 64 个，按最大堆叠拆开丢出来。 */
+    /** 复制被右键的方块本身：每次只掉 1 个，避免右键一次喷出一整组。 */
     private static void duplicateBlock(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         ItemStack copy = new ItemStack(state.getBlock());

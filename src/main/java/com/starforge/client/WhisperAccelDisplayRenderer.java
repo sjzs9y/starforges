@@ -37,8 +37,9 @@ public class WhisperAccelDisplayRenderer extends EntityRenderer<WhisperAccelDisp
         poseStack.pushPose();
         poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
         poseStack.scale(TEXT_SCALE, -TEXT_SCALE, TEXT_SCALE);
-        drawLine(poseStack, buffer, rateText, -0.75F, 0xFFFFFF, packedLight);
-        drawLine(poseStack, buffer, timeText, 0.9F, timeColor, packedLight);
+        // 坐标单位是字体像素（一行 9px），两行之间留 11px 才不会叠在一起。
+        drawLine(poseStack, buffer, rateText, -10.0F, 0xFFFFFF, packedLight);
+        drawLine(poseStack, buffer, timeText, 1.0F, timeColor, packedLight);
         poseStack.popPose();
     }
 
