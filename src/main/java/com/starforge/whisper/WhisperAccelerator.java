@@ -4,10 +4,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.animal.Chicken;
@@ -16,70 +19,174 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
- * 右键「加速」模式的运行时状态：记录被加速的方块与生物，持续 30 秒。
+ * 右键「加速」的运行时状态。
  *
- * <p>方块：每 tick 额外驱动 {@link #TICKS_PER_TICK} 次方块实体 ticker（熔炉、机器等），
- * 没有方块实体但会随机刻的方块（作物、树苗）则额外执行随机刻，从而加快生长。</p>
+ * <p>先用右击给目标挂一层 1 倍加速，再右键会翻倍（上限 {@link #MAX_MULTIPLIER} 倍），
+ * 每次右键把持续时间刷新回 {@link #DURATION_TICKS}（30 秒）。</p>
  *
- * <p>生物：只推进计时器（幼年成长、繁殖冷却、下蛋、长毛、蜜蜂状态），
- * 不跑 AI / 寻路，避免生物抽风。</p>
+ * <p>方块：每 tick 按倍率驱动方块实体 ticker；没有方块实体但会随机刻的方块（作物、树苗）
+ * 则按倍率执行随机刻。生物：只推进计时器（成长、繁殖冷却、下蛋、长毛、蜜蜂）。</p>
  *
- * <p>状态只存在内存里，重进世界后会清空。</p>
+ * <p>每个被加速的目标头顶挂一个 {@code TextDisplay}，第一行显示倍率，第二行显示剩余秒数。
+ * 状态只存在内存里，重进世界会清空。</p>
  */
 public final class WhisperAccelerator {
 
     /** 加速持续 30 秒。 */
     public static final int DURATION_TICKS = 600;
 
-    /** 每游戏 tick 额外推进的次数（10 ≈ 11 倍速）。 */
-    public static final int TICKS_PER_TICK = 10;
+    /** 倍率上限。 */
+    public static final int MAX_MULTIPLIER = 64;
 
-    private static final Map<ResourceKey<Level>, Map<BlockPos, Long>> BLOCKS = new HashMap<>();
-    private static final Map<ResourceKey<Level>, Map<UUID, Long>> ENTITIES = new HashMap<>();
+    /** 每秒刷新一次头顶文字。 */
+    private static final int DISPLAY_INTERVAL = 20;
+
+    private static final Map<ResourceKey<Level>, Map<BlockPos, Target>> BLOCKS = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Map<UUID, Target>> ENTITIES = new HashMap<>();
+
+    /** 单个被加速目标的运行时状态。 */
+    private static final class Target {
+        int multiplier = 1;
+        long expireTick;
+        Display.TextDisplay display;
+    }
 
     public static void accelerateBlock(ServerLevel level, BlockPos pos) {
-        BLOCKS.computeIfAbsent(level.dimension(), key -> new HashMap<>())
-                .put(pos.immutable(), level.getGameTime() + DURATION_TICKS);
+        BlockPos key = pos.immutable();
+        Map<BlockPos, Target> map = BLOCKS.computeIfAbsent(level.dimension(), k -> new HashMap<>());
+        Target target = map.get(key);
+        boolean fresh = target == null;
+        if (fresh) {
+            target = new Target();
+            map.put(key, target);
+            target.display = spawnDisplay(level, Vec3.atCenterOf(key).add(0.0D, 1.3D, 0.0D));
+        } else {
+            target.multiplier = Math.min(MAX_MULTIPLIER, target.multiplier * 2);
+        }
+        target.expireTick = level.getGameTime() + DURATION_TICKS;
+        updateDisplay(level, target);
     }
 
     public static void accelerateEntity(ServerLevel level, LivingEntity entity) {
-        ENTITIES.computeIfAbsent(level.dimension(), key -> new HashMap<>())
-                .put(entity.getUUID(), level.getGameTime() + DURATION_TICKS);
+        UUID id = entity.getUUID();
+        Map<UUID, Target> map = ENTITIES.computeIfAbsent(level.dimension(), k -> new HashMap<>());
+        Target target = map.get(id);
+        if (target == null) {
+            target = new Target();
+            map.put(id, target);
+            target.display = spawnDisplay(level, displayPosFor(entity));
+        } else {
+            target.multiplier = Math.min(MAX_MULTIPLIER, target.multiplier * 2);
+        }
+        target.expireTick = level.getGameTime() + DURATION_TICKS;
+        updateDisplay(level, target);
+    }
+
+    /** 这个位置是否值得加速（有 ticker 的机器，或会随机刻的作物）。 */
+    public static boolean isAccelerable(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (state.isAir()) {
+            return false;
+        }
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity != null) {
+            return state.getTicker(level, blockEntity.getType()) != null;
+        }
+        return state.isRandomlyTicking();
     }
 
     public static void tick(ServerLevel level) {
         long now = level.getGameTime();
 
-        Map<BlockPos, Long> blocks = BLOCKS.get(level.dimension());
+        Map<BlockPos, Target> blocks = BLOCKS.get(level.dimension());
         if (blocks != null && !blocks.isEmpty()) {
-            blocks.entrySet().removeIf(entry -> entry.getValue() < now);
             for (BlockPos pos : blocks.keySet().toArray(new BlockPos[0])) {
-                if (!tickBlock(level, pos)) {
+                Target target = blocks.get(pos);
+                if (target == null) {
+                    continue;
+                }
+                if (target.expireTick < now || !tickBlock(level, pos, target.multiplier)) {
+                    discardDisplay(target);
                     blocks.remove(pos);
+                    continue;
+                }
+                if (now % DISPLAY_INTERVAL == 0) {
+                    updateDisplay(level, target);
                 }
             }
         }
 
-        Map<UUID, Long> entities = ENTITIES.get(level.dimension());
+        Map<UUID, Target> entities = ENTITIES.get(level.dimension());
         if (entities != null && !entities.isEmpty()) {
-            entities.entrySet().removeIf(entry -> entry.getValue() < now);
             for (UUID id : entities.keySet().toArray(new UUID[0])) {
-                if (!(level.getEntity(id) instanceof LivingEntity living) || !living.isAlive() || living.isRemoved()) {
+                Target target = entities.get(id);
+                if (target == null) {
+                    continue;
+                }
+                if (!(level.getEntity(id) instanceof LivingEntity living)
+                        || !living.isAlive() || living.isRemoved()
+                        || target.expireTick < now) {
+                    discardDisplay(target);
                     entities.remove(id);
                     continue;
                 }
-                tickEntityTimers(living);
+                for (int i = 0; i < target.multiplier; i++) {
+                    tickEntityTimers(living);
+                }
+                if (target.display != null && !target.display.isRemoved()) {
+                    target.display.setPos(displayPosFor(living));
+                }
+                if (now % DISPLAY_INTERVAL == 0) {
+                    updateDisplay(level, target);
+                }
             }
         }
     }
 
+    // ------------------------------------------------------------------ 头顶文字
+
+    private static Vec3 displayPosFor(LivingEntity entity) {
+        return new Vec3(entity.getX(), entity.getY() + entity.getBbHeight() + 0.8D, entity.getZ());
+    }
+
+    private static Display.TextDisplay spawnDisplay(ServerLevel level, Vec3 pos) {
+        Display.TextDisplay display = EntityType.TEXT_DISPLAY.create(level);
+        if (display == null) {
+            return null;
+        }
+        display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
+        display.setBillboardConstraints(Display.BillboardConstraints.CENTER);
+        display.setBackgroundColor(0x40000000);
+        level.addFreshEntity(display);
+        return display;
+    }
+
+    private static void updateDisplay(ServerLevel level, Target target) {
+        if (target.display == null || target.display.isRemoved()) {
+            return;
+        }
+        long remainTicks = Math.max(0L, target.expireTick - level.getGameTime());
+        String text = "x" + target.multiplier + "\n" + (remainTicks / 20L) + "s";
+        target.display.setText(Component.literal(text));
+    }
+
+    private static void discardDisplay(Target target) {
+        if (target.display != null && !target.display.isRemoved()) {
+            target.display.discard();
+        }
+        target.display = null;
+    }
+
+    // ------------------------------------------------------------------ 推进方块 / 生物
+
     /**
-     * 推进一个方块。返回 {@code false} 表示这个位置已经不值得继续加速（被挖掉 / 没有可 tick 的东西）。
+     * 推进一个方块 {@code multiplier} 次。返回 {@code false} 表示这个位置已经不值得继续加速。
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static boolean tickBlock(ServerLevel level, BlockPos pos) {
+    private static boolean tickBlock(ServerLevel level, BlockPos pos, int multiplier) {
         if (!level.isLoaded(pos)) {
             return false;
         }
@@ -94,7 +201,7 @@ public final class WhisperAccelerator {
             if (ticker == null) {
                 return false;
             }
-            for (int i = 0; i < TICKS_PER_TICK; i++) {
+            for (int i = 0; i < multiplier; i++) {
                 ticker.tick(level, pos, state, blockEntity);
             }
             return true;
@@ -104,7 +211,7 @@ public final class WhisperAccelerator {
             return false;
         }
         RandomSource random = level.getRandom();
-        for (int i = 0; i < TICKS_PER_TICK; i++) {
+        for (int i = 0; i < multiplier; i++) {
             state.randomTick(level, pos, random);
         }
         return true;
@@ -112,28 +219,21 @@ public final class WhisperAccelerator {
 
     /** 只推进生物身上的计时器，不跑 AI。 */
     private static void tickEntityTimers(LivingEntity entity) {
-        int extra = TICKS_PER_TICK;
-
-        // 幼年成长（age < 0 向 0 推进）+ 繁殖后冷却（age > 0 向 0 递减）
         if (entity instanceof AgeableMob ageable) {
             int age = ageable.getAge();
             if (age != 0) {
-                int step = Math.min(Math.abs(age), extra);
-                ageable.setAge(age < 0 ? age + step : age - step);
+                ageable.setAge(age < 0 ? Math.min(0, age + 1) : Math.max(0, age - 1));
             }
         }
 
-        // 鸡下蛋
         if (entity instanceof Chicken chicken && !chicken.isBaby()) {
-            chicken.eggTime = Math.max(0, chicken.eggTime - extra);
+            chicken.eggTime = Math.max(0, chicken.eggTime - 1);
         }
 
-        // 羊剪毛后长毛
         if (entity instanceof Sheep sheep && !sheep.isBaby() && sheep.isSheared()) {
             sheep.setSheared(false);
         }
 
-        // 蜜蜂：不再疲倦、允许回巢
         if (entity instanceof Bee bee) {
             bee.resetTicksWithoutNectarSinceExitingHive();
             bee.setStayOutOfHiveCountdown(0);

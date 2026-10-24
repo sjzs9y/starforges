@@ -16,6 +16,7 @@
   "itemGroup.starforge": "星辉工坊",
   "key.categories.starforge": "星辉工坊",
   "key.starforge.open_whisper": "打开轻语轻扬界面",
+  "key.starforge.switch_mode": "切换右键模式",
   "message.starforge.mode": "模式：%s",
   "mode.starforge.accelerate": "加速",
   "mode.starforge.attack": "范围攻击",

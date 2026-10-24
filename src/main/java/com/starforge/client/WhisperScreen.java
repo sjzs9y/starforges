@@ -25,8 +25,13 @@ public class WhisperScreen extends Screen {
     private static final int PANEL_WIDTH = 220;
     private static final int BUTTON_HEIGHT = 20;
     private static final int ROW_STEP = 22;
+    /** 每列最多放几行；超过就自动分成多列，避免界面越加越长。 */
+    private static final int MAX_ROWS = 8;
+    private static final int COLUMN_GAP = 6;
 
     private final Map<WhisperAbility, Button> buttons = new EnumMap<>(WhisperAbility.class);
+
+    private int gridTop;
 
     public WhisperScreen() {
         super(Component.translatable("screen.starforge.whisper"));
@@ -37,14 +42,29 @@ public class WhisperScreen extends Screen {
         this.buttons.clear();
 
         WhisperAbility[] abilities = WhisperAbility.all();
-        int totalHeight = (abilities.length - 1) * ROW_STEP + BUTTON_HEIGHT;
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = (this.height - totalHeight) / 2 + 10;
+        int count = abilities.length;
 
-        for (int i = 0; i < abilities.length; i++) {
+        // 自动分列：超过 MAX_ROWS 行就再开一列
+        int columns = (count + MAX_ROWS - 1) / MAX_ROWS;
+        int rows = (count + columns - 1) / columns;
+
+        int buttonWidth = Math.min(PANEL_WIDTH, (this.width - 40 - (columns - 1) * COLUMN_GAP) / columns);
+        int totalWidth = columns * buttonWidth + (columns - 1) * COLUMN_GAP;
+        int totalHeight = (rows - 1) * ROW_STEP + BUTTON_HEIGHT;
+
+        int left = (this.width - totalWidth) / 2;
+        int top = (this.height - totalHeight) / 2 + 10;
+        this.gridTop = top;
+
+        for (int i = 0; i < count; i++) {
             WhisperAbility ability = abilities[i];
+            int column = i / rows;
+            int row = i % rows;
+            int x = left + column * (buttonWidth + COLUMN_GAP);
+            int y = top + row * ROW_STEP;
+
             Button button = Button.builder(label(ability), b -> toggle(ability))
-                    .bounds(left, top + i * ROW_STEP, PANEL_WIDTH, BUTTON_HEIGHT)
+                    .bounds(x, y, buttonWidth, BUTTON_HEIGHT)
                     .build();
             this.buttons.put(ability, button);
             this.addRenderableWidget(button);
@@ -54,8 +74,8 @@ public class WhisperScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-        int titleY = this.height / 2 - 40 - WhisperAbility.all().length * ROW_STEP / 2;
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, Math.max(12, titleY), 0xFFFFFF);
+        int titleY = Math.max(10, this.gridTop - 18);
+        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, titleY, 0xFFFFFF);
     }
 
     @Override

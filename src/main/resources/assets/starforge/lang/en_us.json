@@ -16,6 +16,7 @@
   "itemGroup.starforge": "Starforge",
   "key.categories.starforge": "Starforge",
   "key.starforge.open_whisper": "Open Whisper Menu",
+  "key.starforge.switch_mode": "Switch Right-click Mode",
   "message.starforge.mode": "Mode: %s",
   "mode.starforge.accelerate": "Acceleration",
   "mode.starforge.attack": "Area Attack",

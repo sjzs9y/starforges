@@ -84,12 +84,6 @@ public class WhisperItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
 
-        // 潜行 + 右键：切换模式
-        if (player.isShiftKeyDown()) {
-            cycleMode(level, player, stack);
-            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
-        }
-
         if (WhisperData.getMode(stack) != WhisperMode.ATTACK) {
             return InteractionResultHolder.pass(stack);
         }
@@ -98,6 +92,28 @@ public class WhisperItem extends Item {
         }
         player.startUsingItem(hand);
         return InteractionResultHolder.consume(stack);
+    }
+
+    /**
+     * 潜行 + 右键方块 = 加速。
+     *
+     * <p>必须放在 {@code onItemUseFirst} 里：这个钩子在方块自己的交互之前执行，
+     * 所以熔炉、箱子这类「会弹界面」的方块也能被抢到（{@code useOn} 做不到）。</p>
+     */
+    @Override
+    public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) {
+        Player player = context.getPlayer();
+        if (player == null || !player.isShiftKeyDown()) {
+            return InteractionResult.PASS;
+        }
+        if (!WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
+            return InteractionResult.PASS;
+        }
+        if (context.getLevel().isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+        WhisperAccelerator.accelerateBlock((ServerLevel) context.getLevel(), context.getClickedPos());
+        return InteractionResult.SUCCESS;
     }
 
     // ------------------------------------------------------------------ 右键：方块
@@ -111,8 +127,8 @@ public class WhisperItem extends Item {
         ItemStack stack = context.getItemInHand();
 
         if (player.isShiftKeyDown()) {
-            cycleMode(context.getLevel(), player, stack);
-            return InteractionResult.SUCCESS;
+            // 潜行右键已经由 onItemUseFirst 处理；这里放行给原版
+            return InteractionResult.PASS;
         }
 
         WhisperMode mode = WhisperData.getMode(stack);
@@ -140,8 +156,15 @@ public class WhisperItem extends Item {
                                                   InteractionHand hand) {
         Level level = player.level();
 
+        // 潜行 + 右键生物 = 加速
         if (player.isShiftKeyDown()) {
-            cycleMode(level, player, stack);
+            if (!WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
+                return InteractionResult.PASS;
+            }
+            if (level.isClientSide()) {
+                return InteractionResult.SUCCESS;
+            }
+            WhisperAccelerator.accelerateEntity((ServerLevel) level, target);
             return InteractionResult.SUCCESS;
         }
 
@@ -177,15 +200,6 @@ public class WhisperItem extends Item {
     }
 
     // ------------------------------------------------------------------ 各模式的具体行为
-
-    private static void cycleMode(Level level, Player player, ItemStack stack) {
-        if (level.isClientSide()) {
-            return;
-        }
-        WhisperMode next = WhisperData.cycleMode(stack);
-        player.displayClientMessage(Component.translatable("message.starforge.mode",
-                Component.translatable(next.getTranslationKey())), true);
-    }
 
     /** 冷却允许时执行一次范围攻击，返回是否真的触发了。 */
     private static boolean tryAttack(Level level, Player player, ItemStack stack) {
