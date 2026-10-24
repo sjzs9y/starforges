@@ -48,6 +48,38 @@ public final class WhisperData {
         setEnabled(stack, ability, !isEnabled(stack, ability));
     }
 
+    // ------------------------------------------------------------------ 右键模式
+
+    private static final String MODE_KEY = "Mode";
+
+    public static WhisperMode getMode(ItemStack stack) {
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data == null) {
+            return WhisperMode.ATTACK;
+        }
+        CompoundTag tag = data.copyTag();
+        if (!tag.contains(ROOT)) {
+            return WhisperMode.ATTACK;
+        }
+        return WhisperMode.byKey(tag.getCompound(ROOT).getString(MODE_KEY));
+    }
+
+    public static void setMode(ItemStack stack, WhisperMode mode) {
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
+        CompoundTag root = tag.getCompound(ROOT);
+        root.putString(MODE_KEY, mode.getKey());
+        tag.put(ROOT, root);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    /** 潜行右键：切到下一个模式，返回切换后的模式。 */
+    public static WhisperMode cycleMode(ItemStack stack) {
+        WhisperMode next = getMode(stack).next();
+        setMode(stack, next);
+        return next;
+    }
+
     /**
      * 找出玩家身上的轻语轻扬：主手 → 副手 → 背包 36 格。
      *

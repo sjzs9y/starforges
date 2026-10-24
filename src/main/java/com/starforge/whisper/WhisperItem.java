@@ -3,13 +3,16 @@ package com.starforge.whisper;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -20,10 +23,12 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
@@ -35,6 +40,8 @@ import net.minecraft.world.phys.AABB;
  *
  * <p>精准模式 / 幸运模式不是自己算掉落，而是给物品本身挂上真实的附魔：
  * 精准 = 精准采集 I，幸运 = 时运 20 + 抢夺 20。这样原版与其它模组的掉落逻辑都会自动认账。</p>
+ *
+ * <p>右键行为由 {@link WhisperMode} 决定：范围攻击 / 加速 / 复制；潜行 + 右键循环切换。</p>
  */
 public class WhisperItem extends Item {
 
@@ -46,16 +53,6 @@ public class WhisperItem extends Item {
     /** 基础挖掘速度；实际返回值会再乘上方块硬度。 */
     private static final float BASE_MINING_SPEED = 12.0F;
 
-    public WhisperItem(Properties properties) {
-        super(properties);
-    }
-
-    @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("tooltip.starforge.whisper.hint").withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.translatable("tooltip.starforge.whisper.attack").withStyle(ChatFormatting.GRAY));
-    }
-
     /** 右键范围攻击的半径：50 格，即 100×100×100 的范围。 */
     public static final double ATTACK_RADIUS = 50.0D;
 
@@ -65,28 +62,101 @@ public class WhisperItem extends Item {
     /** 白名单目标（创造 / 旁观 / 持有本物品的生物）挨的固定伤害，而不是被秒杀。 */
     public static final float FALLBACK_DAMAGE = 10.0F;
 
-    /**
-     * 右键触发范围攻击。
-     *
-     * <p>返回 {@code consume} 并进入「使用中」状态，这样按住右键时 {@link #onUseTick} 会每 tick 回调；
-     * 配合 {@link #getUseDuration} 就能实现「按住持续清场」。</p>
-     */
+    /** 复制模式一次复制多少个。 */
+    public static final int DUPLICATE_COUNT = 64;
+
+    public WhisperItem(Properties properties) {
+        super(properties);
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        tooltip.add(Component.translatable("tooltip.starforge.whisper.hint").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.starforge.whisper.attack").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.starforge.whisper.mode",
+                        Component.translatable(WhisperData.getMode(stack).getTranslationKey()))
+                .withStyle(ChatFormatting.AQUA));
+    }
+
+    // ------------------------------------------------------------------ 右键：空气
+
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+
+        // 潜行 + 右键：切换模式
+        if (player.isShiftKeyDown()) {
+            cycleMode(level, player, stack);
+            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+        }
+
+        if (WhisperData.getMode(stack) != WhisperMode.ATTACK) {
             return InteractionResultHolder.pass(stack);
         }
-        if (player.getCooldowns().isOnCooldown(stack.getItem())) {
+        if (!tryAttack(level, player, stack)) {
             return InteractionResultHolder.pass(stack);
-        }
-        if (!level.isClientSide()) {
-            attackArea(level, player);
-            player.getCooldowns().addCooldown(stack.getItem(), ATTACK_COOLDOWN_TICKS);
         }
         player.startUsingItem(hand);
         return InteractionResultHolder.consume(stack);
     }
+
+    // ------------------------------------------------------------------ 右键：方块
+
+    @Override
+    public InteractionResult useOn(UseOnContext context) {
+        Player player = context.getPlayer();
+        if (player == null) {
+            return InteractionResult.PASS;
+        }
+        ItemStack stack = context.getItemInHand();
+
+        if (player.isShiftKeyDown()) {
+            cycleMode(context.getLevel(), player, stack);
+            return InteractionResult.SUCCESS;
+        }
+
+        WhisperMode mode = WhisperData.getMode(stack);
+        if (!WhisperData.isEnabled(stack, mode.getRequiredToggle())) {
+            return InteractionResult.PASS;
+        }
+        if (context.getLevel().isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+
+        ServerLevel level = (ServerLevel) context.getLevel();
+        BlockPos pos = context.getClickedPos();
+        switch (mode) {
+            case ACCELERATE -> WhisperAccelerator.accelerateBlock(level, pos);
+            case DUPLICATE -> duplicateBlock(level, pos);
+            case ATTACK -> tryAttack(level, player, stack);
+        }
+        return InteractionResult.SUCCESS;
+    }
+
+    // ------------------------------------------------------------------ 右键：生物
+
+    @Override
+    public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target,
+                                                  InteractionHand hand) {
+        Level level = player.level();
+
+        if (player.isShiftKeyDown()) {
+            cycleMode(level, player, stack);
+            return InteractionResult.SUCCESS;
+        }
+
+        WhisperMode mode = WhisperData.getMode(stack);
+        if (mode != WhisperMode.ACCELERATE || !WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
+            return InteractionResult.PASS;
+        }
+        if (level.isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+        WhisperAccelerator.accelerateEntity((ServerLevel) level, target);
+        return InteractionResult.SUCCESS;
+    }
+
+    // ------------------------------------------------------------------ 按住右键连发
 
     /** 按住右键时每 tick 回调；冷却好了就再清一次，所以按住等于每秒一次。 */
     @Override
@@ -94,20 +164,42 @@ public class WhisperItem extends Item {
         if (level.isClientSide() || !(living instanceof Player player)) {
             return;
         }
-        if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+        if (WhisperData.getMode(stack) != WhisperMode.ATTACK) {
             return;
         }
-        if (player.getCooldowns().isOnCooldown(stack.getItem())) {
-            return;
-        }
-        attackArea(level, player);
-        player.getCooldowns().addCooldown(stack.getItem(), ATTACK_COOLDOWN_TICKS);
+        tryAttack(level, player, stack);
     }
 
     /** 「使用中」的持续时间；给一个很大的值，松手才结束。 */
     @Override
     public int getUseDuration(ItemStack stack, LivingEntity entity) {
         return 72000;
+    }
+
+    // ------------------------------------------------------------------ 各模式的具体行为
+
+    private static void cycleMode(Level level, Player player, ItemStack stack) {
+        if (level.isClientSide()) {
+            return;
+        }
+        WhisperMode next = WhisperData.cycleMode(stack);
+        player.displayClientMessage(Component.translatable("message.starforge.mode",
+                Component.translatable(next.getTranslationKey())), true);
+    }
+
+    /** 冷却允许时执行一次范围攻击，返回是否真的触发了。 */
+    private static boolean tryAttack(Level level, Player player, ItemStack stack) {
+        if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+            return false;
+        }
+        if (player.getCooldowns().isOnCooldown(stack.getItem())) {
+            return false;
+        }
+        if (!level.isClientSide()) {
+            attackArea(level, player);
+            player.getCooldowns().addCooldown(stack.getItem(), ATTACK_COOLDOWN_TICKS);
+        }
+        return true;
     }
 
     /**
@@ -134,6 +226,23 @@ public class WhisperItem extends Item {
             entity.discard();
         }
     }
+
+    /** 复制被右键的方块本身：一次 64 个，按最大堆叠拆开丢出来。 */
+    private static void duplicateBlock(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        ItemStack copy = new ItemStack(state.getBlock());
+        if (copy.isEmpty()) {
+            return;
+        }
+        int remaining = DUPLICATE_COUNT;
+        while (remaining > 0) {
+            int count = Math.min(remaining, copy.getMaxStackSize());
+            Block.popResource(level, pos, copy.copyWithCount(count));
+            remaining -= count;
+        }
+    }
+
+    // ------------------------------------------------------------------ 万能工具
 
     /**
      * 挖掘速度 = 基础速度 × 硬度，因此耗时恒定（约 2~3 tick），挖什么都是一样快。
@@ -168,7 +277,6 @@ public class WhisperItem extends Item {
 
     /**
      * 精准模式 = 精准采集 I；幸运模式 = 时运 20 + 抢夺 20；两个都关 = 无附魔。
-     * 两个模式互斥由 {@link WhisperAbility#getExclusive()} 与网络包处理，这里只负责反映结果。
      */
     private static void syncEnchantments(ItemStack stack, Level level) {
         boolean precise = WhisperData.isEnabled(stack, WhisperAbility.PRECISE);

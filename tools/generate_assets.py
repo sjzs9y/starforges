@@ -384,6 +384,13 @@ EXTRA_LANG = {
         "whisper.starforge.water_breathing": "Water Breathing",
         "whisper.starforge.true_invisibility": "True Invisibility",
         "whisper.starforge.precise": "Precise Mode",
+        "whisper.starforge.accelerate": "Acceleration",
+        "whisper.starforge.duplicate": "Duplication",
+        "mode.starforge.attack": "Area Attack",
+        "mode.starforge.accelerate": "Acceleration",
+        "mode.starforge.duplicate": "Duplication",
+        "message.starforge.mode": "Mode: %s",
+        "tooltip.starforge.whisper.mode": "Current mode: %s",
         "whisper.starforge.lucky": "Lucky Mode",
         "gui.starforge.on": "ON",
         "gui.starforge.off": "OFF",
@@ -403,6 +410,13 @@ EXTRA_LANG = {
         "whisper.starforge.water_breathing": "水下呼吸",
         "whisper.starforge.true_invisibility": "真·隐身",
         "whisper.starforge.precise": "精准模式",
+        "whisper.starforge.accelerate": "加速",
+        "whisper.starforge.duplicate": "复制",
+        "mode.starforge.attack": "范围攻击",
+        "mode.starforge.accelerate": "加速",
+        "mode.starforge.duplicate": "复制",
+        "message.starforge.mode": "模式：%s",
+        "tooltip.starforge.whisper.mode": "当前模式：%s",
         "whisper.starforge.lucky": "幸运模式",
         "gui.starforge.on": "开",
         "gui.starforge.off": "关",
@@ -506,3 +520,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

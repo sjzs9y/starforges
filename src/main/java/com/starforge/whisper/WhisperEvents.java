@@ -1,6 +1,7 @@
 package com.starforge.whisper;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -14,6 +15,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.level.BlockDropsEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 /**
@@ -35,8 +37,7 @@ public final class WhisperEvents {
     /** 开启飞行时的倍率。 */
     private static final float FLYING_SPEED_MULTIPLIER = 4.0F;
 
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+    public static void onPlayerTick(PlayerTickEvent.Post event) {        if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
 
@@ -60,6 +61,13 @@ public final class WhisperEvents {
         if (isOn(stack, WhisperAbility.TRUE_INVISIBILITY)) {
             // 视觉隐身；「怪不主动锁定你」由 onLivingChangeTarget 处理
             player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, EFFECT_DURATION, 0, false, false));
+        }
+    }
+
+    /** 世界 tick：驱动「加速」模式记录下来的方块与生物。 */
+    public static void onLevelTick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel serverLevel) {
+            WhisperAccelerator.tick(serverLevel);
         }
     }
 

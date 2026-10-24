@@ -21,7 +21,11 @@ public enum WhisperAbility {
 
     // 挖掘模式：拿在主手时生效，两者互斥
     PRECISE("precise", "whisper.starforge.precise", false),
-    LUCKY("lucky", "whisper.starforge.lucky", false);
+    LUCKY("lucky", "whisper.starforge.lucky", false),
+
+    // 右键模式对应的总开关
+    ACCELERATE("accelerate", "whisper.starforge.accelerate", false),
+    DUPLICATE("duplicate", "whisper.starforge.duplicate", false);
 
     private static final WhisperAbility[] VALUES = values();
 
