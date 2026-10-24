@@ -2,6 +2,8 @@ package com.starforge.whisper;
 
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -73,6 +75,36 @@ public final class WhisperData {
     /** 玩家身上带着的物品里，某个被动开关是否处于打开状态。 */
     public static boolean isPassiveEnabled(Player player, WhisperAbility ability) {
         return isEnabled(findWhisper(player), ability);
+    }
+
+    /**
+     * 这个生物是否「持有」轻语轻扬。
+     *
+     * <p>玩家查主手 / 副手 / 背包；其它生物只查装备栏（主手、副手、头盔、胸甲、护腿、靴子），
+     * 不查它们的容器背包（马箱、狐狸叼着的东西之类）。</p>
+     */
+    public static boolean holdsWhisper(LivingEntity entity) {
+        if (entity instanceof Player player) {
+            return !findWhisper(player).isEmpty();
+        }
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            if (entity.getItemBySlot(slot).getItem() instanceof WhisperItem) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 秒杀白名单：创造模式玩家、旁观模式玩家、以及任何持有轻语轻扬的生物。
+     *
+     * <p>命中白名单时一击必杀不生效，改为固定伤害；范围攻击同理。</p>
+     */
+    public static boolean isProtectedTarget(LivingEntity target) {
+        if (target instanceof Player player && (player.isCreative() || player.isSpectator())) {
+            return true;
+        }
+        return holdsWhisper(target);
     }
 
     private WhisperData() {

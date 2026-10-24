@@ -1,5 +1,6 @@
 package com.starforge.whisper;
 
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
@@ -55,11 +56,14 @@ public class WhisperItem extends Item {
         tooltip.add(Component.translatable("tooltip.starforge.whisper.attack").withStyle(ChatFormatting.GRAY));
     }
 
-    /** 右键范围攻击的半径：7 格，即 15×15×15 的范围。 */
-    public static final double ATTACK_RADIUS = 7.0D;
+    /** 右键范围攻击的半径：50 格，即 100×100×100 的范围。 */
+    public static final double ATTACK_RADIUS = 50.0D;
 
-    /** 按住右键时，每隔多少 tick 清一次场（10 tick = 0.5 秒）。 */
-    public static final int ATTACK_INTERVAL = 10;
+    /** 范围攻击冷却：20 tick = 1 秒。 */
+    public static final int ATTACK_COOLDOWN_TICKS = 20;
+
+    /** 白名单目标（创造 / 旁观 / 持有本物品的生物）挨的固定伤害，而不是被秒杀。 */
+    public static final float FALLBACK_DAMAGE = 10.0F;
 
     /**
      * 右键触发范围攻击。
@@ -73,14 +77,18 @@ public class WhisperItem extends Item {
         if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
             return InteractionResultHolder.pass(stack);
         }
+        if (player.getCooldowns().isOnCooldown(stack.getItem())) {
+            return InteractionResultHolder.pass(stack);
+        }
         if (!level.isClientSide()) {
             attackArea(level, player);
+            player.getCooldowns().addCooldown(stack.getItem(), ATTACK_COOLDOWN_TICKS);
         }
         player.startUsingItem(hand);
         return InteractionResultHolder.consume(stack);
     }
 
-    /** 按住右键时每 tick 回调一次；这里每 {@link #ATTACK_INTERVAL} tick 清一次场。 */
+    /** 按住右键时每 tick 回调；冷却好了就再清一次，所以按住等于每秒一次。 */
     @Override
     public void onUseTick(Level level, LivingEntity living, ItemStack stack, int remainingUseDuration) {
         if (level.isClientSide() || !(living instanceof Player player)) {
@@ -89,9 +97,11 @@ public class WhisperItem extends Item {
         if (!WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
             return;
         }
-        if (remainingUseDuration % ATTACK_INTERVAL == 0) {
-            attackArea(level, player);
+        if (player.getCooldowns().isOnCooldown(stack.getItem())) {
+            return;
         }
+        attackArea(level, player);
+        player.getCooldowns().addCooldown(stack.getItem(), ATTACK_COOLDOWN_TICKS);
     }
 
     /** 「使用中」的持续时间；给一个很大的值，松手才结束。 */
@@ -101,30 +111,27 @@ public class WhisperItem extends Item {
     }
 
     /**
-     * 对周围 15×15×15 范围内的生物造成必死伤害，并把范围内的掉落物和经验球一起清掉。
-     *
-     * <p>用伤害而不是直接 setHealth(0)，这样「无敌」才能生效，也能正常吃到抢夺加成。</p>
+     * 对周围 100×100×100 范围内的生物执行秒杀（白名单目标改为固定伤害），
+     * 并清掉「开打之前就已经在地上」的掉落物和经验球——新掉出来的战利品会保留。
      */
     private static void attackArea(Level level, Player player) {
         DamageSource source = player.damageSources().playerAttack(player);
         AABB area = player.getBoundingBox().inflate(ATTACK_RADIUS);
 
+        // 先快照：只清理这一轮攻击之前就存在的掉落物，新掉落保留
+        List<Entity> staleLoot = new ArrayList<>();
+        staleLoot.addAll(level.getEntitiesOfClass(ItemEntity.class, area));
+        staleLoot.addAll(level.getEntitiesOfClass(ExperienceOrb.class, area));
+
         for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area)) {
             if (target == player || !target.isAlive()) {
                 continue;
             }
-            if (target instanceof Player other && WhisperData.isPassiveEnabled(other, WhisperAbility.INVINCIBLE)) {
-                continue;
-            }
-            target.hurt(source, Float.MAX_VALUE);
+            WhisperEvents.applyKill(player, target, source);
         }
 
-        // 清场：范围内的掉落物 + 经验球（死亡掉落是在 hurt 里同步生成的，所以放在后面）
-        for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, area)) {
-            item.discard();
-        }
-        for (ExperienceOrb orb : level.getEntitiesOfClass(ExperienceOrb.class, area)) {
-            orb.discard();
+        for (Entity entity : staleLoot) {
+            entity.discard();
         }
     }
 

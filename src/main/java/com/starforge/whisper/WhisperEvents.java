@@ -2,14 +2,17 @@ package com.starforge.whisper;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
@@ -25,6 +28,12 @@ public final class WhisperEvents {
 
     /** How long the continuously refreshed effects last. Slightly more than 1 second to be safe. */
     private static final int EFFECT_DURATION = 220;
+
+    /** 原版飞行速度基准值。 */
+    private static final float BASE_FLYING_SPEED = 0.05F;
+
+    /** 开启飞行时的倍率。 */
+    private static final float FLYING_SPEED_MULTIPLIER = 4.0F;
 
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
@@ -62,17 +71,44 @@ public final class WhisperEvents {
             // 氪金萝莉的写法：顺手灭火、清掉摔落距离
             player.clearFire();
             player.fallDistance = 0.0F;
+        }
+    }
+
+    /**
+     * 近战：一击必杀走「氪金萝莉式秒杀」，白名单目标改为固定伤害。
+     *
+     * <p>放在 {@link AttackEntityEvent} 里而不是伤害事件里，是因为真秒杀要绕过 {@code hurt()}，
+     * 否则会被 boss 的伤害上限截断。</p>
+     */
+    public static void onAttackEntity(AttackEntityEvent event) {
+        Player player = event.getEntity();
+        if (player.level().isClientSide()) {
             return;
         }
-
-        // 一击必杀（主动）：手持攻击时把伤害抬到必死
-        Entity attacker = event.getSource().getEntity();
-        if (attacker instanceof ServerPlayer player) {
-            ItemStack stack = player.getMainHandItem();
-            if (stack.getItem() instanceof WhisperItem && WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
-                event.setAmount(Float.MAX_VALUE);
-            }
+        ItemStack stack = player.getMainHandItem();
+        if (!(stack.getItem() instanceof WhisperItem) || !WhisperData.isEnabled(stack, WhisperAbility.ONE_HIT)) {
+            return;
         }
+        if (!(event.getTarget() instanceof LivingEntity target)) {
+            return;
+        }
+        applyKill(player, target, player.damageSources().playerAttack(player));
+        event.setCanceled(true);
+    }
+
+    /**
+     * 对单个目标执行「秒杀 or 固定伤害」。
+     *
+     * <p>白名单（创造 / 旁观 / 持有本物品的生物）走普通伤害，其余直接设血量为 0 并调用
+     * {@code die()}，这样战利品、经验、死亡动画都正常，同时绕开 boss 自定义的伤害上限。</p>
+     */
+    public static void applyKill(Player player, LivingEntity target, DamageSource source) {
+        if (WhisperData.isProtectedTarget(target)) {
+            target.hurt(source, WhisperItem.FALLBACK_DAMAGE);
+            return;
+        }
+        target.setHealth(0.0F);
+        target.die(source);
     }
 
     /**
@@ -128,14 +164,26 @@ public final class WhisperEvents {
 
     /**
      * Gives or removes the "may fly" ability. Creative and spectator players keep their own flight.
+     *
+     * <p>开启时飞行速度提升到原版的 4 倍（原版 0.05 → 0.2），参考 Re-Avaritia 的 Infinity Suit。</p>
      */
     private static void updateFlight(ServerPlayer player, boolean enabled) {
         boolean wanted = enabled || player.isCreative() || player.isSpectator();
+        float wantedSpeed = enabled ? BASE_FLYING_SPEED * FLYING_SPEED_MULTIPLIER : BASE_FLYING_SPEED;
+
+        boolean changed = false;
         if (player.getAbilities().mayfly != wanted) {
             player.getAbilities().mayfly = wanted;
             if (!wanted) {
                 player.getAbilities().flying = false;
             }
+            changed = true;
+        }
+        if (player.getAbilities().getFlyingSpeed() != wantedSpeed) {
+            player.getAbilities().setFlyingSpeed(wantedSpeed);
+            changed = true;
+        }
+        if (changed) {
             player.onUpdateAbilities();
         }
     }

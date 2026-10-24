@@ -17,7 +17,7 @@
   "key.categories.starforge": "星辉工坊",
   "key.starforge.open_whisper": "打开轻语轻扬界面",
   "screen.starforge.whisper": "轻语轻扬",
-  "tooltip.starforge.whisper.attack": "右键：击杀 15×15 范围内的生物（需开启一击必杀）",
+  "tooltip.starforge.whisper.attack": "右键：秒杀 100×100×100 范围内的生物（1 秒冷却，需开启一击必杀）",
   "tooltip.starforge.whisper.hint": "按 G 打开功能开关",
   "whisper.starforge.flight": "飞行",
   "whisper.starforge.invincible": "无敌",

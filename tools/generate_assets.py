@@ -1,4 +1,4 @@
-"""Generate the placeholder assets of the Starforge mod.
+﻿"""Generate the placeholder assets of the Starforge mod.
 
 The script writes:
   * 16x16 item / block textures (pixel art drawn procedurally)
@@ -388,7 +388,7 @@ EXTRA_LANG = {
         "gui.starforge.on": "ON",
         "gui.starforge.off": "OFF",
         "tooltip.starforge.whisper.hint": "Press G to open the ability menu",
-        "tooltip.starforge.whisper.attack": "Right-click: kill everything within 15x15",
+        "tooltip.starforge.whisper.attack": "Right-click: instakill within 100x100x100 (1s cooldown)",
     },
     "zh_cn.json": {
         "itemGroup.starforge": "星辉工坊",
@@ -407,7 +407,7 @@ EXTRA_LANG = {
         "gui.starforge.on": "开",
         "gui.starforge.off": "关",
         "tooltip.starforge.whisper.hint": "按 G 打开功能开关",
-        "tooltip.starforge.whisper.attack": "右键：击杀 15×15 范围内的生物（需开启一击必杀）",
+        "tooltip.starforge.whisper.attack": "右键：秒杀 100×100×100 范围内的生物（1 秒冷却，需开启一击必杀）",
     },
 }
 
