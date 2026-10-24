@@ -20,7 +20,11 @@
   "tooltip.starforge.whisper.hint": "按 G 打开功能开关",
   "whisper.starforge.flight": "飞行",
   "whisper.starforge.invincible": "无敌",
+  "whisper.starforge.lucky": "幸运模式",
   "whisper.starforge.night_vision": "夜视",
   "whisper.starforge.one_hit": "一击必杀",
-  "whisper.starforge.saturation": "饱和"
+  "whisper.starforge.precise": "精准模式",
+  "whisper.starforge.saturation": "饱和",
+  "whisper.starforge.true_invisibility": "真·隐身",
+  "whisper.starforge.water_breathing": "水下呼吸"
 }

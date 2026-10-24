@@ -20,7 +20,11 @@
   "tooltip.starforge.whisper.hint": "Press G to open the ability menu",
   "whisper.starforge.flight": "Flight",
   "whisper.starforge.invincible": "Invincible",
+  "whisper.starforge.lucky": "Lucky Mode",
   "whisper.starforge.night_vision": "Night Vision",
   "whisper.starforge.one_hit": "One Hit Kill",
-  "whisper.starforge.saturation": "Saturation"
+  "whisper.starforge.precise": "Precise Mode",
+  "whisper.starforge.saturation": "Saturation",
+  "whisper.starforge.true_invisibility": "True Invisibility",
+  "whisper.starforge.water_breathing": "Water Breathing"
 }

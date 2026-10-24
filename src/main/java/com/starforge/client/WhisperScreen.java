@@ -1,9 +1,9 @@
 package com.starforge.client;
 
+import com.starforge.network.TogglePayload;
 import com.starforge.whisper.WhisperAbility;
 import com.starforge.whisper.WhisperData;
 import com.starforge.whisper.WhisperItem;
-import com.starforge.network.TogglePayload;
 import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -23,7 +23,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public class WhisperScreen extends Screen {
 
     private static final int PANEL_WIDTH = 220;
-    private static final int ROW_HEIGHT = 24;
+    private static final int BUTTON_HEIGHT = 20;
+    private static final int ROW_STEP = 22;
 
     private final Map<WhisperAbility, Button> buttons = new EnumMap<>(WhisperAbility.class);
 
@@ -34,14 +35,16 @@ public class WhisperScreen extends Screen {
     @Override
     protected void init() {
         this.buttons.clear();
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = this.height / 2 - 60;
 
         WhisperAbility[] abilities = WhisperAbility.all();
+        int totalHeight = (abilities.length - 1) * ROW_STEP + BUTTON_HEIGHT;
+        int left = (this.width - PANEL_WIDTH) / 2;
+        int top = (this.height - totalHeight) / 2 + 10;
+
         for (int i = 0; i < abilities.length; i++) {
             WhisperAbility ability = abilities[i];
             Button button = Button.builder(label(ability), b -> toggle(ability))
-                    .bounds(left, top + i * ROW_HEIGHT, PANEL_WIDTH, 20)
+                    .bounds(left, top + i * ROW_STEP, PANEL_WIDTH, BUTTON_HEIGHT)
                     .build();
             this.buttons.put(ability, button);
             this.addRenderableWidget(button);
@@ -51,7 +54,8 @@ public class WhisperScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 80, 0xFFFFFF);
+        int titleY = this.height / 2 - 40 - WhisperAbility.all().length * ROW_STEP / 2;
+        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, Math.max(12, titleY), 0xFFFFFF);
     }
 
     @Override
@@ -65,8 +69,16 @@ public class WhisperScreen extends Screen {
             return;
         }
         boolean newValue = !WhisperData.isEnabled(stack, ability);
+
         // optimistic client update so the label reacts instantly
+        if (newValue) {
+            WhisperAbility exclusive = ability.getExclusive();
+            if (exclusive != null) {
+                WhisperData.setEnabled(stack, exclusive, false);
+            }
+        }
         WhisperData.setEnabled(stack, ability, newValue);
+
         PacketDistributor.sendToServer(new TogglePayload(ability.ordinal(), newValue));
         refreshLabels();
     }

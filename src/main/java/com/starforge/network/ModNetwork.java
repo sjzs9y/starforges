@@ -28,7 +28,19 @@ public final class ModNetwork {
             if (!(stack.getItem() instanceof WhisperItem)) {
                 return;
             }
-            WhisperData.setEnabled(stack, WhisperAbility.byIndex(payload.ability()), payload.value());
+
+            WhisperAbility ability = WhisperAbility.byIndex(payload.ability());
+
+            // 精准模式 / 幸运模式互斥：打开一个就把另一个关掉
+            if (payload.value()) {
+                WhisperAbility exclusive = ability.getExclusive();
+                if (exclusive != null) {
+                    WhisperData.setEnabled(stack, exclusive, false);
+                }
+            }
+
+            WhisperData.setEnabled(stack, ability, payload.value());
+
             // push the new custom data to the client so the GUI shows the real state
             player.inventoryMenu.broadcastChanges();
         });
