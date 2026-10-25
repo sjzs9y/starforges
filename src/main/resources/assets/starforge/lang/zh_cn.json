@@ -1,5 +1,8 @@
 {
+  "block.starforge.flowing_image": "流光影像",
   "block.starforge.starforge_block": "星辉金属块",
+  "block.starforge.uncrafting_table": "流光拆解台",
+  "container.starforge.uncrafting_table": "流光拆解台",
   "gui.starforge.off": "关",
   "gui.starforge.on": "开",
   "item.starforge.starforge_axe": "星辉斧",

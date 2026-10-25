@@ -1,5 +1,8 @@
 {
+  "block.starforge.flowing_image": "Flowing Image",
   "block.starforge.starforge_block": "Block of Starforged Metal",
+  "block.starforge.uncrafting_table": "Flowing Uncrafting Table",
+  "container.starforge.uncrafting_table": "Flowing Uncrafting Table",
   "gui.starforge.off": "OFF",
   "gui.starforge.on": "ON",
   "item.starforge.starforge_axe": "Starforged Axe",

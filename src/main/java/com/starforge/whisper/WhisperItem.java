@@ -1,5 +1,6 @@
 package com.starforge.whisper;
 
+import com.starforge.registry.ModBlocks;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -125,6 +126,18 @@ public class WhisperItem extends Item {
             return InteractionResult.PASS;
         }
         ItemStack stack = context.getItemInHand();
+
+        // 复制模式下右键流光影像时，让方块自己复制手里的轻语；
+        // 否则轻语的 useOn 会抢先把「方块本身」复制 64 个。
+        if (context.getLevel().getBlockState(context.getClickedPos()).is(ModBlocks.FLOWING_IMAGE.get())
+                && WhisperData.getMode(stack) == WhisperMode.DUPLICATE) {
+            return InteractionResult.PASS;
+        }
+
+        // 拆解台始终以打开界面为优先，避免被轻语的右键模式抢走交互。
+        if (context.getLevel().getBlockState(context.getClickedPos()).is(ModBlocks.UNCRAFTING_TABLE.get())) {
+            return InteractionResult.PASS;
+        }
 
         if (player.isShiftKeyDown()) {
             // 潜行右键已经由 onItemUseFirst 处理；这里放行给原版

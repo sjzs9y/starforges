@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "starforge:block/flowing_image"
+    }
+  }
+}

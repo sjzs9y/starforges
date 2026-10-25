@@ -24,6 +24,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.WHISPER.get());
                         output.accept(ModItems.STARFORGE_INGOT.get());
                         output.accept(ModItems.STARFORGE_BLOCK.get());
+                        output.accept(ModItems.FLOWING_IMAGE.get());
+                        output.accept(ModItems.UNCRAFTING_TABLE.get());
                         output.accept(ModItems.STARFORGE_SWORD.get());
                         output.accept(ModItems.STARFORGE_PICKAXE.get());
                         output.accept(ModItems.STARFORGE_AXE.get());

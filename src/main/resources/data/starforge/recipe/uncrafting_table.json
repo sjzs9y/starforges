@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "starforge:whisper"
+    },
+    {
+      "item": "minecraft:crafting_table"
+    }
+  ],
+  "result": {
+    "id": "starforge:uncrafting_table",
+    "count": 1
+  }
+}

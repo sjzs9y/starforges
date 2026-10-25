@@ -2,11 +2,13 @@ package com.starforge.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.starforge.network.CycleModePayload;
+import com.starforge.registry.ModMenus;
 import com.starforge.whisper.WhisperItem;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -42,6 +44,12 @@ public final class ClientSetup {
     public static void init(net.neoforged.bus.api.IEventBus modEventBus) {
         NeoForge.EVENT_BUS.addListener(ClientSetup::onClientTick);
         modEventBus.addListener(ClientSetup::registerRenderers);
+        modEventBus.addListener(ClientSetup::registerScreens);
+    }
+
+    /** 拆解台界面。 */
+    public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.UNCRAFTING_TABLE.get(), UncraftingScreen::new);
     }
 
     /** 注册「加速」悬浮文字的渲染器。 */

@@ -2,6 +2,7 @@ package com.starforge.network;
 
 import com.starforge.whisper.WhisperAbility;
 import com.starforge.whisper.WhisperData;
+import com.starforge.uncrafting.UncraftingMenu;
 import com.starforge.whisper.WhisperItem;
 import com.starforge.whisper.WhisperMode;
 import net.minecraft.network.chat.Component;
@@ -20,6 +21,18 @@ public final class ModNetwork {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToServer(TogglePayload.TYPE, TogglePayload.STREAM_CODEC, ModNetwork::handleToggle);
         registrar.playToServer(CycleModePayload.TYPE, CycleModePayload.STREAM_CODEC, ModNetwork::handleCycleMode);
+        registrar.playToServer(CycleUncraftPayload.TYPE, CycleUncraftPayload.STREAM_CODEC,
+                ModNetwork::handleCycleUncraft);
+    }
+
+    /** 拆解台界面：切换匹配到的配方。 */
+    private static void handleCycleUncraft(CycleUncraftPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (context.player() instanceof ServerPlayer player
+                    && player.containerMenu instanceof UncraftingMenu menu) {
+                menu.cycleRecipe(payload.delta());
+            }
+        });
     }
 
     /** Z 键：把主手物品的右键模式切到下一个，并在动作栏提示。 */

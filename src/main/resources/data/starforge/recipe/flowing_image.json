@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PPP",
+    "PWP",
+    "PPP"
+  ],
+  "key": {
+    "P": {
+      "tag": "minecraft:planks"
+    },
+    "W": {
+      "item": "starforge:whisper"
+    }
+  },
+  "result": {
+    "id": "starforge:flowing_image",
+    "count": 1
+  }
+}

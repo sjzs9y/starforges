@@ -8,6 +8,7 @@ import com.starforge.registry.ModBlocks;
 import com.starforge.registry.ModCreativeTabs;
 import com.starforge.registry.ModEntities;
 import com.starforge.registry.ModItems;
+import com.starforge.registry.ModMenus;
 import com.starforge.whisper.WhisperEvents;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -33,6 +34,7 @@ public final class Starforge {
         ModArmorMaterials.MATERIALS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
+        ModMenus.MENUS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);
 

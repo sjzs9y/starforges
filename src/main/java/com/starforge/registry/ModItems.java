@@ -31,6 +31,12 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> STARFORGE_BLOCK = ITEMS.register("starforge_block",
             () -> new BlockItem(ModBlocks.STARFORGE_BLOCK.get(), new Item.Properties()));
 
+    public static final DeferredItem<BlockItem> FLOWING_IMAGE = ITEMS.register("flowing_image",
+            () -> new BlockItem(ModBlocks.FLOWING_IMAGE.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> UNCRAFTING_TABLE = ITEMS.register("uncrafting_table",
+            () -> new BlockItem(ModBlocks.UNCRAFTING_TABLE.get(), new Item.Properties()));
+
     // ------------------------------------------------------------------ 轻语轻扬
 
     public static final DeferredItem<WhisperItem> WHISPER = ITEMS.register("whisper",
