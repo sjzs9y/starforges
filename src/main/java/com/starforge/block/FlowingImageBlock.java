@@ -44,7 +44,8 @@ public class FlowingImageBlock extends Block {
         return InteractionResult.sidedSuccess(level.isClientSide());
     }
 
-    private static void duplicateHeldItem(Level level, BlockPos pos, Player player) {
+    /** 复制主手物品 64 个；轻语在潜行右键时也会直接调用这里。 */
+    public static void duplicateHeldItem(Level level, BlockPos pos, Player player) {
         if (level.isClientSide()) {
             return;
         }

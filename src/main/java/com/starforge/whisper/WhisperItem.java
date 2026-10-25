@@ -1,5 +1,7 @@
 package com.starforge.whisper;
 
+import com.starforge.block.FlowingImageBlock;
+import com.starforge.block.UncraftingTableBlock;
 import com.starforge.registry.ModBlocks;
 import java.util.ArrayList;
 import java.util.List;
@@ -100,11 +102,23 @@ public class WhisperItem extends Item {
      *
      * <p>必须放在 {@code onItemUseFirst} 里：这个钩子在方块自己的交互之前执行，
      * 所以熔炉、箱子这类「会弹界面」的方块也能被抢到（{@code useOn} 做不到）。</p>
+     *
+     * <p>流光影像和流光拆解台是例外：它们有自己的右键交互，这里直接放行。</p>
      */
     @Override
     public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) {
         Player player = context.getPlayer();
-        if (player == null || !player.isShiftKeyDown()) {
+        if (player == null) {
+            return InteractionResult.PASS;
+        }
+
+        // 这两个方块有自己的交互（复制 / 开界面），不能被「潜行右键加速」抢走。
+        BlockState clicked = context.getLevel().getBlockState(context.getClickedPos());
+        if (clicked.is(ModBlocks.FLOWING_IMAGE.get()) || clicked.is(ModBlocks.UNCRAFTING_TABLE.get())) {
+            return InteractionResult.PASS;
+        }
+
+        if (!player.isShiftKeyDown()) {
             return InteractionResult.PASS;
         }
         if (!WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
@@ -126,17 +140,18 @@ public class WhisperItem extends Item {
             return InteractionResult.PASS;
         }
         ItemStack stack = context.getItemInHand();
+        BlockPos pos = context.getClickedPos();
+        BlockState clicked = context.getLevel().getBlockState(pos);
 
-        // 复制模式下右键流光影像时，让方块自己复制手里的轻语；
-        // 否则轻语的 useOn 会抢先把「方块本身」复制 64 个。
-        if (context.getLevel().getBlockState(context.getClickedPos()).is(ModBlocks.FLOWING_IMAGE.get())
-                && WhisperData.getMode(stack) == WhisperMode.DUPLICATE) {
-            return InteractionResult.PASS;
+        // 非潜行时方块自己的 useItemOn 会先处理；潜行时原版会跳过方块交互，
+        // 所以这里必须补一遍，否则轻语会把「复制 / 开界面」整个吃掉。
+        if (clicked.is(ModBlocks.FLOWING_IMAGE.get())) {
+            FlowingImageBlock.duplicateHeldItem(context.getLevel(), pos, player);
+            return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
         }
-
-        // 拆解台始终以打开界面为优先，避免被轻语的右键模式抢走交互。
-        if (context.getLevel().getBlockState(context.getClickedPos()).is(ModBlocks.UNCRAFTING_TABLE.get())) {
-            return InteractionResult.PASS;
+        if (clicked.is(ModBlocks.UNCRAFTING_TABLE.get())) {
+            UncraftingTableBlock.openMenu(context.getLevel(), player);
+            return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
         }
 
         if (player.isShiftKeyDown()) {
@@ -153,7 +168,6 @@ public class WhisperItem extends Item {
         }
 
         ServerLevel level = (ServerLevel) context.getLevel();
-        BlockPos pos = context.getClickedPos();
         switch (mode) {
             case ACCELERATE -> WhisperAccelerator.accelerateBlock(level, pos);
             case DUPLICATE -> duplicateBlock(level, pos);

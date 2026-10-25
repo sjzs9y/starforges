@@ -42,7 +42,8 @@ public class UncraftingTableBlock extends Block {
         return InteractionResult.sidedSuccess(level.isClientSide());
     }
 
-    private static void openMenu(Level level, Player player) {
+    /** 打开拆解界面；轻语在潜行右键时也会直接调用这里。 */
+    public static void openMenu(Level level, Player player) {
         if (level.isClientSide()) {
             return;
         }
