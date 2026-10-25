@@ -178,12 +178,8 @@ public final class UncraftingMenu extends AbstractContainerMenu {
 
         for (int i = OUTPUT_START; i <= OUTPUT_END; i++) {
             ItemStack output = container.getItem(i);
-            if (output.isEmpty()) {
-                continue;
-            }
-            ItemStack copy = output.copy();
-            if (!player.getInventory().add(copy)) {
-                player.drop(copy, false);
+            if (!output.isEmpty()) {
+                giveOrDrop(player, output);
             }
         }
 
@@ -279,11 +275,20 @@ public final class UncraftingMenu extends AbstractContainerMenu {
             ItemStack input = container.getItem(INPUT_SLOT);
             container.setItem(INPUT_SLOT, ItemStack.EMPTY);
             clearOutputs();
-            if (!input.isEmpty() && !player.getInventory().add(input)) {
-                player.drop(input, false);
+            if (!input.isEmpty()) {
+                giveOrDrop(player, input);
             }
         } finally {
             refreshing = false;
+        }
+    }
+
+    /** 优先塞进背包，塞不下的部分掉在玩家脚下。 */
+    private static void giveOrDrop(Player player, ItemStack stack) {
+        ItemStack remainder = stack.copy();
+        player.getInventory().add(remainder);
+        if (!remainder.isEmpty()) {
+            player.drop(remainder, false);
         }
     }
 
