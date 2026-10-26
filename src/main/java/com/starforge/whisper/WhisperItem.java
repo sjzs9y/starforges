@@ -280,7 +280,13 @@ public class WhisperItem extends Item {
      */
     private static void duplicateBlock(ServerLevel level, BlockPos pos, Player player, BlockHitResult hitResult) {
         BlockState state = level.getBlockState(pos);
-        ItemStack copy = state.getCloneItemStack(hitResult, level, pos, player);
+        ItemStack copy;
+        try {
+            copy = state.getCloneItemStack(hitResult, level, pos, player);
+        } catch (RuntimeException exception) {
+            // 某个模组的精准选取实现抛异常时，退回最普通的方块物品。
+            copy = ItemStack.EMPTY;
+        }
         if (copy.isEmpty()) {
             copy = new ItemStack(state.getBlock());
         }
@@ -291,7 +297,11 @@ public class WhisperItem extends Item {
 
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity != null) {
-            blockEntity.saveToItem(copy, level.registryAccess());
+            try {
+                blockEntity.saveToItem(copy, level.registryAccess());
+            } catch (RuntimeException exception) {
+                // 方块实体 NBT 保存失败时仍然复制方块本身，避免整个交互崩掉。
+            }
         }
 
         int remaining = DUPLICATE_COUNT;
