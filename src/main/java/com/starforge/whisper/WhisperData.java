@@ -73,16 +73,10 @@ public final class WhisperData {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
-    /**
-     * Z 键：切到下一个模式，并自动打开该模式对应的总开关。
-     *
-     * <p>之前只切模式、不碰开关，新给的轻语默认所有主动开关都是关的，
-     * 所以会出现「模式显示复制，但右键没反应」的假故障。</p>
-     */
+    /** Z 键：切到下一个模式。模式本身就是开关。 */
     public static WhisperMode cycleMode(ItemStack stack) {
         WhisperMode next = getMode(stack).next();
         setMode(stack, next);
-        setEnabled(stack, next.getRequiredToggle(), true);
         return next;
     }
 

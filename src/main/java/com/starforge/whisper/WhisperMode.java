@@ -5,20 +5,18 @@ package com.starforge.whisper;
  */
 public enum WhisperMode {
 
-    ATTACK("attack", "mode.starforge.attack", WhisperAbility.ONE_HIT),
-    ACCELERATE("accelerate", "mode.starforge.accelerate", WhisperAbility.ACCELERATE),
-    DUPLICATE("duplicate", "mode.starforge.duplicate", WhisperAbility.DUPLICATE);
+    ATTACK("attack", "mode.starforge.attack"),
+    ACCELERATE("accelerate", "mode.starforge.accelerate"),
+    DUPLICATE("duplicate", "mode.starforge.duplicate");
 
     private static final WhisperMode[] VALUES = values();
 
     private final String key;
     private final String translationKey;
-    private final WhisperAbility requiredToggle;
 
-    WhisperMode(String key, String translationKey, WhisperAbility requiredToggle) {
+    WhisperMode(String key, String translationKey) {
         this.key = key;
         this.translationKey = translationKey;
-        this.requiredToggle = requiredToggle;
     }
 
     public String getKey() {
@@ -27,11 +25,6 @@ public enum WhisperMode {
 
     public String getTranslationKey() {
         return this.translationKey;
-    }
-
-    /** 这个模式对应的总开关；开关关掉时右键不会生效。 */
-    public WhisperAbility getRequiredToggle() {
-        return this.requiredToggle;
     }
 
     public WhisperMode next() {

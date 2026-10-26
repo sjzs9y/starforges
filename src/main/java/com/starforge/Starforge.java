@@ -46,6 +46,7 @@ public final class Starforge {
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onBlockDrops);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onAttackEntity);
+        NeoForge.EVENT_BUS.addListener(WhisperEvents::onLeftClickBlock);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onLevelTick);
         NeoForge.EVENT_BUS.addListener(WhisperEvents::onLevelLoad);
 

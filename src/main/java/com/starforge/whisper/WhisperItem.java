@@ -1,7 +1,6 @@
 package com.starforge.whisper;
 
 import com.starforge.block.FlowingImageBlock;
-import com.starforge.block.UncraftingTableBlock;
 import com.starforge.registry.ModBlocks;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,8 +31,10 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * 轻语轻扬。
@@ -98,12 +99,12 @@ public class WhisperItem extends Item {
     }
 
     /**
-     * 潜行 + 右键方块 = 加速。
+     * 右键方块的第一入口。
      *
-     * <p>必须放在 {@code onItemUseFirst} 里：这个钩子在方块自己的交互之前执行，
-     * 所以熔炉、箱子这类「会弹界面」的方块也能被抢到（{@code useOn} 做不到）。</p>
+     * <p>必须在 {@code onItemUseFirst} 里处理复制：这个钩子在方块自己的交互之前执行，
+     * 所以箱子、机器、拆解台这类「右键会弹界面」的方块也能被复制，而不是打开 GUI。</p>
      *
-     * <p>流光影像和流光拆解台是例外：它们有自己的右键交互，这里直接放行。</p>
+     * <p>复制模式优先于潜行加速；其它模式仍然保留「潜行右键 = 加速」的快捷方式。</p>
      */
     @Override
     public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) {
@@ -112,23 +113,32 @@ public class WhisperItem extends Item {
             return InteractionResult.PASS;
         }
 
-        // 这两个方块有自己的交互（复制 / 开界面），不能被「潜行右键加速」抢走。
-        BlockState clicked = context.getLevel().getBlockState(context.getClickedPos());
-        if (clicked.is(ModBlocks.FLOWING_IMAGE.get()) || clicked.is(ModBlocks.UNCRAFTING_TABLE.get())) {
-            return InteractionResult.PASS;
+        Level level = context.getLevel();
+        BlockPos pos = context.getClickedPos();
+        BlockState state = level.getBlockState(pos);
+        WhisperMode mode = WhisperData.getMode(stack);
+
+        if (mode == WhisperMode.DUPLICATE) {
+            if (!level.isClientSide()) {
+                if (state.is(ModBlocks.FLOWING_IMAGE.get())) {
+                    // 流光影像是「复制手持物」的特殊方块，不复制方块本身。
+                    FlowingImageBlock.duplicateHeldItem(level, pos, player);
+                } else {
+                    BlockHitResult hit = new BlockHitResult(context.getClickLocation(),
+                            context.getClickedFace(), pos, false);
+                    duplicateBlock((ServerLevel) level, pos, player, hit);
+                }
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide());
         }
 
-        if (!player.isShiftKeyDown()) {
-            return InteractionResult.PASS;
+        if (player.isShiftKeyDown()) {
+            if (!level.isClientSide()) {
+                WhisperAccelerator.accelerateBlock((ServerLevel) level, pos);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide());
         }
-        if (!WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
-            return InteractionResult.PASS;
-        }
-        if (context.getLevel().isClientSide()) {
-            return InteractionResult.SUCCESS;
-        }
-        WhisperAccelerator.accelerateBlock((ServerLevel) context.getLevel(), context.getClickedPos());
-        return InteractionResult.SUCCESS;
+        return InteractionResult.PASS;
     }
 
     // ------------------------------------------------------------------ 右键：方块
@@ -140,38 +150,35 @@ public class WhisperItem extends Item {
             return InteractionResult.PASS;
         }
         ItemStack stack = context.getItemInHand();
+        Level level = context.getLevel();
         BlockPos pos = context.getClickedPos();
-        BlockState clicked = context.getLevel().getBlockState(pos);
-
-        // 非潜行时方块自己的 useItemOn 会先处理；潜行时原版会跳过方块交互，
-        // 所以这里必须补一遍，否则轻语会把「复制 / 开界面」整个吃掉。
-        if (clicked.is(ModBlocks.FLOWING_IMAGE.get())) {
-            FlowingImageBlock.duplicateHeldItem(context.getLevel(), pos, player);
-            return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
-        }
-        if (clicked.is(ModBlocks.UNCRAFTING_TABLE.get())) {
-            UncraftingTableBlock.openMenu(context.getLevel(), player);
-            return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
-        }
-
-        if (player.isShiftKeyDown()) {
-            // 潜行右键已经由 onItemUseFirst 处理；这里放行给原版
-            return InteractionResult.PASS;
-        }
-
         WhisperMode mode = WhisperData.getMode(stack);
-        if (!WhisperData.isEnabled(stack, mode.getRequiredToggle())) {
+
+        // 复制模式已经在 onItemUseFirst 里拦截；这里只作为兜底。
+        if (mode == WhisperMode.DUPLICATE) {
+            if (!level.isClientSide()) {
+                BlockHitResult hit = new BlockHitResult(context.getClickLocation(),
+                        context.getClickedFace(), pos, false);
+                duplicateBlock((ServerLevel) level, pos, player, hit);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide());
+        }
+
+        // 潜行加速已经由 onItemUseFirst 处理。
+        if (player.isShiftKeyDown()) {
             return InteractionResult.PASS;
         }
-        if (context.getLevel().isClientSide()) {
+        if (level.isClientSide()) {
             return InteractionResult.SUCCESS;
         }
 
-        ServerLevel level = (ServerLevel) context.getLevel();
+        ServerLevel serverLevel = (ServerLevel) level;
         switch (mode) {
-            case ACCELERATE -> WhisperAccelerator.accelerateBlock(level, pos);
-            case DUPLICATE -> duplicateBlock(level, pos);
-            case ATTACK -> tryAttack(level, player, stack);
+            case ACCELERATE -> WhisperAccelerator.accelerateBlock(serverLevel, pos);
+            case ATTACK -> tryAttack(serverLevel, player, stack);
+            default -> {
+                // DUPLICATE 已在上面处理
+            }
         }
         return InteractionResult.SUCCESS;
     }
@@ -185,9 +192,6 @@ public class WhisperItem extends Item {
 
         // 潜行 + 右键生物 = 加速
         if (player.isShiftKeyDown()) {
-            if (!WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
-                return InteractionResult.PASS;
-            }
             if (level.isClientSide()) {
                 return InteractionResult.SUCCESS;
             }
@@ -195,8 +199,7 @@ public class WhisperItem extends Item {
             return InteractionResult.SUCCESS;
         }
 
-        WhisperMode mode = WhisperData.getMode(stack);
-        if (mode != WhisperMode.ACCELERATE || !WhisperData.isEnabled(stack, WhisperAbility.ACCELERATE)) {
+        if (WhisperData.getMode(stack) != WhisperMode.ACCELERATE) {
             return InteractionResult.PASS;
         }
         if (level.isClientSide()) {
@@ -268,16 +271,32 @@ public class WhisperItem extends Item {
         }
     }
 
-    /** 复制被右键的方块本身：一次 64 个，按最大堆叠拆开丢出来。 */
-    private static void duplicateBlock(ServerLevel level, BlockPos pos) {
+    /**
+     * 复制被右键的方块本身：一次 64 个，按最大堆叠拆开丢出来。
+     *
+     * <p>物品通过 {@code getCloneItemStack} 获取，兼容模组方块的精准选取物品；
+     * 方块实体（箱子、机器等）再用 {@code saveToItem} 把完整 NBT 写进物品，
+     * 放回去时里面的物品/能量/配置都会保留。</p>
+     */
+    private static void duplicateBlock(ServerLevel level, BlockPos pos, Player player, BlockHitResult hitResult) {
         BlockState state = level.getBlockState(pos);
-        ItemStack copy = new ItemStack(state.getBlock());
+        ItemStack copy = state.getCloneItemStack(hitResult, level, pos, player);
         if (copy.isEmpty()) {
+            copy = new ItemStack(state.getBlock());
+        }
+        if (copy.isEmpty()) {
+            player.displayClientMessage(Component.translatable("message.starforge.no_block_item"), true);
             return;
         }
+
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity != null) {
+            blockEntity.saveToItem(copy, level.registryAccess());
+        }
+
         int remaining = DUPLICATE_COUNT;
         while (remaining > 0) {
-            int count = Math.min(remaining, copy.getMaxStackSize());
+            int count = Math.min(remaining, Math.max(1, copy.getMaxStackSize()));
             Block.popResource(level, pos, copy.copyWithCount(count));
             remaining -= count;
         }

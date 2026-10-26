@@ -147,6 +147,25 @@ public final class WhisperAccelerator {
         }
     }
 
+    /** 这个显示实体是否仍然对应着一个有效的加速目标。 */
+    static boolean isTracked(WhisperAccelDisplay display) {
+        for (Map<BlockPos, Target> map : BLOCKS.values()) {
+            for (Target target : map.values()) {
+                if (target.display == display) {
+                    return true;
+                }
+            }
+        }
+        for (Map<UUID, Target> map : ENTITIES.values()) {
+            for (Target target : map.values()) {
+                if (target.display == display) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** 世界加载时清掉上一次残留的显示实体（加速状态不持久，留着只会变成幽灵文字）。 */
     public static void clearOrphanDisplays(ServerLevel level) {
         List<Entity> orphans = new ArrayList<>();

@@ -48,6 +48,21 @@ public class WhisperAccelDisplay extends Entity {
         // 纯显示用实体，不需要存档
     }
 
+    /** 纯显示实体不写进区块，重进存档时不会再出现幽灵图标。 */
+    @Override
+    public boolean save(CompoundTag tag) {
+        return false;
+    }
+
+    /** 加速器里已经没有对应目标时自毁，用于清理旧存档残留的显示实体。 */
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.level().isClientSide() && !WhisperAccelerator.isTracked(this)) {
+            this.discard();
+        }
+    }
+
     @Override
     public boolean isPickable() {
         return false;

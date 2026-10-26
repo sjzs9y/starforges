@@ -10,10 +10,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -76,6 +80,58 @@ public final class WhisperEvents {
     public static void onLevelLoad(LevelEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
             WhisperAccelerator.clearOrphanDisplays(serverLevel);
+        }
+    }
+
+    /**
+     * 基岩类方块（hardness = -1）的强制破坏。
+     *
+     * <p>原版 {@code getDestroyProgress} 在 hardness == -1 时直接返回 0，
+     * 所以只能绕过挖掘进度：左键 START 时取消原版，服务端调用
+     * {@code gameMode.destroyBlock}。这样仍然会走方块自己的破坏回调和
+     * {@link BlockDropsEvent}，不会像直接 setBlockToAir 那样跳过模组逻辑。</p>
+     */
+    public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getAction() != PlayerInteractEvent.LeftClickBlock.Action.START) {
+            return;
+        }
+
+        Player player = event.getEntity();
+        if (!(player.getMainHandItem().getItem() instanceof WhisperItem)) {
+            return;
+        }
+
+        Level level = event.getLevel();
+        BlockPos pos = event.getPos();
+        BlockState state = level.getBlockState(pos);
+        if (state.isAir() || state.getDestroySpeed(level, pos) >= 0.0F) {
+            return;
+        }
+
+        // 客户端也取消，避免继续走原版 0 进度的挖掘；服务端负责真正破坏。
+        event.setCanceled(true);
+        if (player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.server.execute(() -> breakUnbreakable(serverPlayer, pos));
+        }
+    }
+
+    private static void breakUnbreakable(ServerPlayer player, BlockPos pos) {
+        ServerLevel level = player.serverLevel();
+        BlockState state = level.getBlockState(pos);
+        if (state.isAir() || state.getDestroySpeed(level, pos) >= 0.0F) {
+            return;
+        }
+
+        Block block = state.getBlock();
+        boolean removed = player.gameMode.destroyBlock(pos);
+        if (!removed || !level.getBlockState(pos).isAir()) {
+            return;
+        }
+
+        // 强挖固定补一个方块本体；onBlockDrops 对 hardness < 0 会跳过，避免双份。
+        ItemStack self = new ItemStack(block);
+        if (!self.isEmpty()) {
+            Block.popResource(level, pos, self);
         }
     }
 
@@ -150,6 +206,10 @@ public final class WhisperEvents {
         }
         ItemStack tool = player.getMainHandItem();
         if (!(tool.getItem() instanceof WhisperItem) || !WhisperData.isEnabled(tool, WhisperAbility.PRECISE)) {
+            return;
+        }
+        // 基岩类的本体由 onLeftClickBlock 的强挖逻辑补，这里不再插一份。
+        if (event.getState().getDestroySpeed(event.getLevel(), event.getPos()) < 0.0F) {
             return;
         }
         if (!event.getDrops().isEmpty()) {
